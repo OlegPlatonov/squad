@@ -12,10 +12,30 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from util import masked_softmax
 
 
-class Embedding(nn.Module):
-    """Embedding layer used by BiDAF, without the character-level component.
+class CharacterConvNet(nn.Module):
+    """Character-level convolutional embedder."""
+    def __init__(self, char_vectors, num_filters):
+        super(CharacterConvNet, self).__init__()
+        self.num_filters = num_filters
+        self.embed = nn.Embedding.from_pretrained(char_vectors)
+        self.conv_net = nn.Conv1d(in_channels=char_vectors.size(1), out_channels=num_filters, kernel_size=5, padding=2)
 
-    Word-level embeddings are further refined using a 2-layer Highway Encoder
+    def forward(self, chars):
+        emb = self.embed(chars)
+        batch_size, sent_len, word_len, char_emb_dim = emb.shape
+        emb = emb.permute(0, 1, 3, 2).contiguous()
+        emb = emb.view(batch_size * sent_len, char_emb_dim, word_len)
+        emb = self.conv_net(emb)
+        emb = emb.view(batch_size, sent_len, self.num_filters, word_len)
+        emb = torch.max(emb, dim=-1)[0]
+
+        return emb
+
+
+class Embedding(nn.Module):
+    """Embedding layer used by BiDAF with the character-level component.
+
+    Word-level and character-level embeddings are further refined using a 2-layer Highway Encoder
     (see `HighwayEncoder` class for details).
 
     Args:
@@ -23,16 +43,22 @@ class Embedding(nn.Module):
         hidden_size (int): Size of hidden activations.
         drop_prob (float): Probability of zero-ing out activations
     """
-    def __init__(self, word_vectors, hidden_size, drop_prob):
+    def __init__(self, word_vectors, hidden_size, drop_prob, use_chars=False, char_vectors=None, num_filters=100):
         super(Embedding, self).__init__()
         self.drop_prob = drop_prob
-        self.embed = nn.Embedding.from_pretrained(word_vectors)
-        self.proj = nn.Linear(word_vectors.size(1), hidden_size, bias=False)
+        self.embed_words = nn.Embedding.from_pretrained(word_vectors)
+        self.embed_chars = CharacterConvNet(char_vectors, num_filters) if use_chars else None
+        embedding_dim = word_vectors.size(1) + num_filters if use_chars else word_vectors.size(1)
+        self.proj = nn.Linear(embedding_dim, hidden_size, bias=False)
         self.hwy = HighwayEncoder(2, hidden_size)
 
-    def forward(self, x):
-        emb = self.embed(x)   # (batch_size, seq_len, embed_size)
+    def forward(self, words, chars):
+        emb = self.embed_words(words)   # (batch_size, seq_len, embed_size)
         emb = F.dropout(emb, self.drop_prob, self.training)
+        if self.embed_chars is not None:
+            emb_chars = self.embed_chars(chars)
+            emb_chars = F.dropout(emb_chars, self.drop_prob, self.training)
+            emb = torch.cat((emb, emb_chars), dim=-1)
         emb = self.proj(emb)  # (batch_size, seq_len, hidden_size)
         emb = self.hwy(emb)   # (batch_size, seq_len, hidden_size)
 
