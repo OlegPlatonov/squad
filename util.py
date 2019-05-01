@@ -53,15 +53,15 @@ class SQuAD(data.Dataset):
         self.y2s = torch.from_numpy(dataset['y2s']).long()
 
         if use_v2:
-            # SQuAD 2.0: Use index 0 for no-answer token (token 1 = OOV)
+            # SQuAD 2.0: Use index 0 for no-answer token (token 2 = START)
             batch_size, c_len, w_len = self.context_char_idxs.size()
-            ones = torch.ones((batch_size, 1), dtype=torch.int64)
-            self.context_idxs = torch.cat((ones, self.context_idxs), dim=1)
-            self.question_idxs = torch.cat((ones, self.question_idxs), dim=1)
+            start = torch.ones((batch_size, 1), dtype=torch.int64) * 2
+            self.context_idxs = torch.cat((start, self.context_idxs), dim=1)
+            self.question_idxs = torch.cat((start, self.question_idxs), dim=1)
 
-            ones = torch.ones((batch_size, 1, w_len), dtype=torch.int64)
-            self.context_char_idxs = torch.cat((ones, self.context_char_idxs), dim=1)
-            self.question_char_idxs = torch.cat((ones, self.question_char_idxs), dim=1)
+            start = torch.ones((batch_size, 1, w_len), dtype=torch.int64) * 2
+            self.context_char_idxs = torch.cat((start, self.context_char_idxs), dim=1)
+            self.question_char_idxs = torch.cat((start, self.question_char_idxs), dim=1)
 
             self.y1s += 1
             self.y2s += 1

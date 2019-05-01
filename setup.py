@@ -99,7 +99,7 @@ def process_file(filename, data_type, word_counter, char_counter):
         for article in tqdm(source["data"]):
             for para in article["paragraphs"]:
                 context = para["context"].replace(
-                    "''", '" ').replace("``", '" ')
+                    "''", '" ').replace("``", '" ').lower()
                 context_tokens = word_tokenize(context)
                 context_chars = [list(token) for token in context_tokens]
                 spans = convert_idx(context, context_tokens)
@@ -110,7 +110,7 @@ def process_file(filename, data_type, word_counter, char_counter):
                 for qa in para["qas"]:
                     total += 1
                     ques = qa["question"].replace(
-                        "''", '" ').replace("``", '" ')
+                        "''", '" ').replace("``", '" ').lower()
                     ques_tokens = word_tokenize(ques)
                     ques_chars = [list(token) for token in ques_tokens]
                     for token in ques_tokens:
@@ -148,7 +148,7 @@ def process_file(filename, data_type, word_counter, char_counter):
     return examples, eval_examples
 
 
-def get_embedding(counter, data_type, limit=-1, emb_file=None, vec_size=None, num_vectors=None):
+def get_embedding(counter, data_type, limit=-1, emb_file=None, vec_size=None, num_vectors=None, generator=None):
     print("Pre-processing {} vectors...".format(data_type))
     embedding_dict = {}
     filtered_elements = [k for k, v in counter.items() if v > limit]
@@ -166,18 +166,28 @@ def get_embedding(counter, data_type, limit=-1, emb_file=None, vec_size=None, nu
     else:
         assert vec_size is not None
         for token in filtered_elements:
-            embedding_dict[token] = [np.random.normal(
-                scale=0.1) for _ in range(vec_size)]
+            embedding_dict[token] = list(generator(vec_size))
         print("{} tokens have corresponding {} embedding vector".format(
             len(filtered_elements), data_type))
 
     NULL = "--NULL--"
     OOV = "--OOV--"
-    token2idx_dict = {token: idx for idx, token in enumerate(embedding_dict.keys(), 2)}
+    START = "--START--"
+    GAP = "--GAP--"
+    SPARE_TOKENS = [f"--TOKEN_{i}--" for i in range(1, 11)]
+    token2idx_dict = {token: idx for idx, token in enumerate(embedding_dict.keys(), 14)}
     token2idx_dict[NULL] = 0
     token2idx_dict[OOV] = 1
+    token2idx_dict[START] = 2
+    token2idx_dict[GAP] = 3
+    for i, spare_token in enumerate(SPARE_TOKENS, 4):
+        token2idx_dict[spare_token] = i
     embedding_dict[NULL] = [0. for _ in range(vec_size)]
-    embedding_dict[OOV] = [0. for _ in range(vec_size)]
+    embedding_dict[OOV] = list(generator(vec_size))
+    embedding_dict[START] = list(generator(vec_size))
+    embedding_dict[GAP] = list(generator(vec_size))
+    for spare_token in SPARE_TOKENS:
+        embedding_dict[spare_token] = list(generator(vec_size))
     idx2emb_dict = {idx: embedding_dict[token]
                     for token, idx in token2idx_dict.items()}
     emb_mat = [idx2emb_dict[idx] for idx in range(len(idx2emb_dict))]
@@ -354,9 +364,11 @@ def pre_process(args):
     word_counter, char_counter = Counter(), Counter()
     train_examples, train_eval = process_file(args.train_file, "train", word_counter, char_counter)
     word_emb_mat, word2idx_dict = get_embedding(
-        word_counter, 'word', emb_file=args.glove_file, vec_size=args.glove_dim, num_vectors=args.glove_num_vecs)
+        word_counter, 'word', emb_file=args.glove_file, vec_size=args.glove_dim, num_vectors=args.glove_num_vecs,
+        generator=lambda shape: np.random.normal(loc=0.0, scale=0.4, size=shape))
     char_emb_mat, char2idx_dict = get_embedding(
-        char_counter, 'char', emb_file=None, vec_size=args.char_dim)
+        char_counter, 'char', emb_file=None, vec_size=args.char_dim,
+        generator=lambda shape: np.random.normal(loc=0.0, scale=0.1, size=shape))
 
     # Process dev and test sets
     dev_examples, dev_eval = process_file(args.dev_file, "dev", word_counter, char_counter)

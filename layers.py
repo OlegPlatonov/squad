@@ -17,7 +17,7 @@ class CharacterConvNet(nn.Module):
     def __init__(self, char_vectors, num_filters):
         super(CharacterConvNet, self).__init__()
         self.num_filters = num_filters
-        self.embed = nn.Embedding.from_pretrained(char_vectors)
+        self.embed = nn.Embedding.from_pretrained(char_vectors, freeze=False)
         self.conv_net = nn.Conv1d(in_channels=char_vectors.size(1), out_channels=num_filters, kernel_size=5, padding=2)
 
     def forward(self, chars):
@@ -46,7 +46,7 @@ class Embedding(nn.Module):
     def __init__(self, word_vectors, hidden_size, drop_prob, use_chars=False, char_vectors=None, num_filters=100):
         super(Embedding, self).__init__()
         self.drop_prob = drop_prob
-        self.embed_words = nn.Embedding.from_pretrained(word_vectors)
+        self.embed_words = nn.Embedding.from_pretrained(word_vectors, freeze=False)
         self.embed_chars = CharacterConvNet(char_vectors, num_filters) if use_chars else None
         embedding_dim = word_vectors.size(1) + num_filters if use_chars else word_vectors.size(1)
         self.proj = nn.Linear(embedding_dim, hidden_size, bias=False)
