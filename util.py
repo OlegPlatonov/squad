@@ -87,6 +87,34 @@ class SQuAD(data.Dataset):
         return len(self.valid_idxs)
 
 
+class GappedText(data.Dataset):
+    def __init__(self, data_path):
+        super(GappedText, self).__init__()
+        dataset = np.load(data_path)
+        self.texts_words = torch.from_numpy(dataset['texts_words']).long()
+        self.texts_chars = torch.from_numpy(dataset['texts_chars']).long()
+        self.gap_indices = torch.from_numpy(dataset['gap_indices']).long()
+        self.fragments_words = tuple(torch.squeeze(X) for X in
+                                     torch.split(torch.from_numpy(dataset['fragments_words']).long(), split_size_or_sections=1, dim=0))
+        self.fragments_chars = tuple(torch.squeeze(X) for X in
+                                     torch.split(torch.from_numpy(dataset['fragments_chars']).long(), split_size_or_sections=1, dim=0))
+        self.correct_gaps = tuple(torch.squeeze(X) for X in
+                                  torch.split(torch.from_numpy(dataset['correct_gaps']).long(), split_size_or_sections=1, dim=-1))
+
+    def __getitem__(self, idx):
+        example = (self.texts_words[idx],
+                   self.texts_chars[idx],
+                   self.gap_indices[idx],
+                   tuple(X[idx] for X in self.fragments_words),
+                   tuple(X[idx] for X in self.fragments_chars),
+                   tuple(X[idx] for X in self.correct_gaps))
+
+        return example
+
+    def __len__(self):
+        return len(self.gap_indices)
+
+
 def collate_fn(examples):
     """Create batch tensors from a list of individual examples returned
     by `SQuAD.__getitem__`. Merge examples of different length by padding
@@ -141,6 +169,58 @@ def collate_fn(examples):
     return (context_idxs, context_char_idxs,
             question_idxs, question_char_idxs,
             y1s, y2s, ids)
+
+
+def gapped_text_collate_fn(examples):
+    def merge_0d(scalars, dtype=torch.int64):
+        return torch.tensor(scalars, dtype=dtype)
+
+    def merge_1d(arrays, dtype=torch.int64, pad_value=0):
+        lengths = [(a != pad_value).sum() for a in arrays]
+        padded = torch.zeros(len(arrays), max(lengths), dtype=dtype)
+        for i, seq in enumerate(arrays):
+            end = lengths[i]
+            padded[i, :end] = seq[:end]
+        return padded
+
+    def merge_1d_no_pad(arrays, dtype=torch.int64):
+        length = arrays[0].shape[-1]
+        tensor = torch.zeros(len(arrays), length, dtype=dtype)
+        for i, seq in enumerate(arrays):
+            tensor[i] = seq
+        return tensor
+
+    def merge_2d(matrices, dtype=torch.int64, pad_value=0):
+        heights = [(m.sum(1) != pad_value).sum() for m in matrices]
+        widths = [(m.sum(0) != pad_value).sum() for m in matrices]
+        padded = torch.zeros(len(matrices), max(heights), max(widths), dtype=dtype)
+        for i, seq in enumerate(matrices):
+            height, width = heights[i], widths[i]
+            padded[i, :height, :width] = seq[:height, :width]
+        return padded
+
+    texts_words, texts_chars, gap_indices, \
+        fragments_words, fragments_chars, correct_gaps = [list(features) for features in zip(*examples)]
+
+    num_fragments = len(fragments_words[0])
+
+    texts_words = merge_1d(texts_words)
+    texts_chars = merge_2d(texts_chars)
+    gap_indices = merge_1d_no_pad(gap_indices)
+
+    texts_words = torch.cat([texts_words for i in range(num_fragments)], dim=0)
+    texts_chars = torch.cat([texts_chars for i in range(num_fragments)], dim=0)
+    gap_indices = torch.cat([gap_indices for i in range(num_fragments)], dim=0)
+
+    fragments_words = [words[i] for i in range(num_fragments) for words in fragments_words]
+    fragments_chars = [chars[i] for i in range(num_fragments) for chars in fragments_chars]
+    correct_gaps = [gap_id[i] for i in range(num_fragments) for gap_id in correct_gaps]
+
+    fragments_words = merge_1d(fragments_words)
+    fragments_chars = merge_2d(fragments_chars)
+    correct_gaps = merge_0d(correct_gaps)
+
+    return texts_words, texts_chars, gap_indices, fragments_words, fragments_chars, correct_gaps
 
 
 class AverageMeter:
