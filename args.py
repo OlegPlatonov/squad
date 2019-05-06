@@ -140,8 +140,8 @@ def get_train_args():
     if args.metric_name == 'NLL':
         # Best checkpoint is the one that minimizes negative log-likelihood
         args.maximize_metric = False
-    elif args.metric_name in ('EM', 'F1'):
-        # Best checkpoint is the one that maximizes EM or F1
+    elif args.metric_name in ('EM', 'F1', 'Accuracy'):
+        # Best checkpoint is the one that maximizes EM or F1 or accuracy
         args.maximize_metric = True
     else:
         raise ValueError('Unrecognized metric name: "{}"'

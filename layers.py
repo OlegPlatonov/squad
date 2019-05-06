@@ -209,7 +209,7 @@ class BiDAFAttention(nn.Module):
         return s
 
 
-class BiDAFOutput(nn.Module):
+class SQuADOutput(nn.Module):
     """Output layer used by BiDAF for question answering.
 
     Computes a linear transformation of the attention and modeling
@@ -223,7 +223,7 @@ class BiDAFOutput(nn.Module):
         drop_prob (float): Probability of zero-ing out activations.
     """
     def __init__(self, hidden_size, drop_prob):
-        super(BiDAFOutput, self).__init__()
+        super(SQuADOutput, self).__init__()
         self.att_linear_1 = nn.Linear(8 * hidden_size, 1)
         self.mod_linear_1 = nn.Linear(2 * hidden_size, 1)
 
@@ -246,3 +246,20 @@ class BiDAFOutput(nn.Module):
         log_p2 = masked_softmax(logits_2.squeeze(), mask, log_softmax=True)
 
         return log_p1, log_p2
+
+
+class GTOutput(nn.Module):
+    def __init__(self, hidden_size):
+        super(GTOutput, self).__init__()
+        self.att_linear = nn.Linear(8 * hidden_size, 1)
+        self.mod_linear = nn.Linear(2 * hidden_size, 1)
+
+    def forward(self, att, mod, gap_indices):
+        batch_size = mod.shape[0]
+        index_all = torch.arange(batch_size).unsqueeze(-1)
+        att_gaps = att[index_all, gap_indices]
+        mod_gaps = mod[index_all, gap_indices]
+
+        logits = self.att_linear(att_gaps) + self.mod_linear(mod_gaps)
+
+        return logits.squeeze()
