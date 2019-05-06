@@ -69,13 +69,17 @@ def main(args):
     scheduler = sched.LambdaLR(optimizer, lambda s: 1.)  # Constant LR
 
     # Get data loader
-    log.info('Building dataset...')
     data_folder = './data/Gapped_Text/Tokenized'
     data_files = [os.path.join(data_folder, file) for file in os.listdir(data_folder)]
-    print('Datasets found:')
+    log.info('Data files found:')
     for file in data_files:
-        print(file)
-    datasets = [GappedText(file) for file in data_files]
+        log.info(file)
+    datasets = []
+    log.info('Building dataset...')
+    for file in data_files:
+        log.info(f'Creating dataset from {file}...')
+        datasets.append(GappedText(file))
+    log.info('Concatenating datasets...')
     train_dataset = data.ConcatDataset(datasets)
 
     train_loader = data.DataLoader(train_dataset,
@@ -84,6 +88,7 @@ def main(args):
                                    num_workers=args.num_workers,
                                    collate_fn=gapped_text_collate_fn)
 
+    log.info('Creating dev dataset...')
     dev_file = './data/Gapped_Text/Tokenized_dev/Dataset_dev.npz'
     dev_dataset = GappedText(dev_file)
     dev_loader = data.DataLoader(dev_dataset,
