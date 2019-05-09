@@ -396,6 +396,7 @@ class CheckpointSaver:
             _, worst_ckpt = self.ckpt_paths.get()
             try:
                 os.remove(worst_ckpt)
+                os.remove(worst_ckpt + '.optim')
                 self._print('Removed checkpoint: {}'.format(worst_ckpt))
             except OSError:
                 # Avoid crashing if checkpoint has been removed or protected
