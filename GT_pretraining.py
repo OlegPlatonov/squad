@@ -12,10 +12,10 @@ import util
 from args import get_train_args
 from collections import OrderedDict
 from json import dumps
-from models import BiDAFGT
+from models import BiDAFGT, BiDAFGTExperiment
 from tensorboardX import SummaryWriter
 from tqdm import tqdm
-from util import gapped_text_collate_fn, GappedText
+from util import gapped_text_collate_fn, GappedText, GappedText_2
 
 
 def main(args):
@@ -41,11 +41,15 @@ def main(args):
 
     # Get model
     log.info('Building model...')
-    model = BiDAFGT(word_vectors=word_vectors,
-                    char_vectors=char_vectors,
-                    hidden_size=args.hidden_size,
-                    drop_prob=args.drop_prob)
+    model = BiDAFGTExperiment(word_vectors=word_vectors,
+                              char_vectors=char_vectors,
+                              hidden_size=args.hidden_size,
+                              drop_prob=args.drop_prob,
+                              out=args.out)
     model = nn.DataParallel(model, args.gpu_ids)
+    print('Output_layer:')
+    print(args.out)
+    print(model.output_layer)
 
     if args.load_path:
         log.info('Loading checkpoint from {}...'.format(args.load_path))
@@ -59,13 +63,12 @@ def main(args):
     # Get saver
     saver = util.CheckpointSaver(args.save_dir,
                                  max_checkpoints=args.max_checkpoints,
-                                 metric_name=args.metric_name,
+                                 metric_name='Accuracy',
                                  maximize_metric=args.maximize_metric,
                                  log=log)
 
     # Get optimizer and scheduler
-    optimizer = optim.Adadelta(model.parameters(), args.lr,
-                               weight_decay=args.l2_wd)
+    optimizer = optim.Adam(model.parameters(), args.lr,  weight_decay=args.l2_wd)
     scheduler = sched.LambdaLR(optimizer, lambda s: 1.)  # Constant LR
 
     # Get data loader
@@ -81,7 +84,7 @@ def main(args):
 
     log.info('Creating dev dataset...')
     dev_file = './data/data.npz'
-    dev_dataset = GappedText(dev_file)
+    dev_dataset = GappedText_2(dev_file)
     dev_loader = data.DataLoader(dev_dataset,
                                  batch_size=args.batch_size,
                                  shuffle=False,

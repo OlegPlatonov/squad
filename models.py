@@ -154,3 +154,74 @@ class BiDAFGT(nn.Module):
         out = self.output_layer(att, mod, gap_indices)
 
         return out
+
+
+class BiDAFEncoderExperiment(nn.Module):
+    def __init__(self, word_vectors, char_vectors, hidden_size, drop_prob=0., use_chars=True):
+        super(BiDAFEncoderExperiment, self).__init__()
+        self.emb = layers.Embedding(word_vectors=word_vectors,
+                                    hidden_size=hidden_size,
+                                    drop_prob=drop_prob,
+                                    use_chars=use_chars,
+                                    char_vectors=char_vectors,
+                                    num_filters=100)
+
+        self.enc = layers.RNNEncoder(input_size=hidden_size,
+                                     hidden_size=hidden_size,
+                                     num_layers=1,
+                                     drop_prob=drop_prob)
+
+        self.att = layers.BiDAFAttention(hidden_size=2 * hidden_size,
+                                         drop_prob=drop_prob)
+
+        self.mod = layers.RNNEncoder(input_size=8 * hidden_size,
+                                     hidden_size=hidden_size,
+                                     num_layers=2,
+                                     drop_prob=drop_prob)
+
+    def forward(self, cw_idxs, cc_idxs, qw_idxs, qc_idxs):
+        c_mask = torch.zeros_like(cw_idxs) != cw_idxs
+        q_mask = torch.zeros_like(qw_idxs) != qw_idxs
+        c_len, q_len = c_mask.sum(-1), q_mask.sum(-1)
+
+        c_emb = self.emb(cw_idxs, cc_idxs)    # (batch_size, c_len, hidden_size)
+        q_emb = self.emb(qw_idxs, qc_idxs)    # (batch_size, q_len, hidden_size)
+
+        c_enc = self.enc(c_emb, c_len)        # (batch_size, c_len, 2 * hidden_size)
+        q_enc = self.enc(q_emb, q_len)        # (batch_size, q_len, 2 * hidden_size)
+
+        att = self.att(c_enc, q_enc,
+                       c_mask, q_mask)        # (batch_size, c_len, 8 * hidden_size)
+
+        mod = self.mod(att, c_len)            # (batch_size, c_len, 2 * hidden_size)
+
+        return att, mod, c_mask, q_enc, q_mask
+
+
+class BiDAFGTExperiment(nn.Module):
+    def __init__(self, word_vectors, char_vectors, hidden_size, drop_prob=0., use_chars=True, out='GTOutput'):
+        super(BiDAFGTExperiment, self).__init__()
+        self.encoder = BiDAFEncoderExperiment(word_vectors=word_vectors,
+                                              char_vectors=char_vectors,
+                                              hidden_size=hidden_size,
+                                              drop_prob=drop_prob,
+                                              use_chars=use_chars)
+
+        output_layers = {
+            'GTOutput': layers.GTOutput,
+            'GTOutput2': layers.GTOutput2,
+            'GTOutputWithPooling': layers.GTOutputWithPooling,
+            'GTOutputWithPooling2': layers.GTOutputWithPooling2,
+            'GTOutputWithPoolingZero': layers.GTOutputWithPoolingZero,
+            'GTOutputWithPoolingZero2': layers.GTOutputWithPoolingZero2,
+            'GTOutputNoAtt': layers.GTOutputNoAtt,
+            'GTOutputDoubleAtt': layers.GTOutputDoubleAtt
+        }
+        self.output_layer = output_layers[out](hidden_size=hidden_size, drop_prob=drop_prob)
+
+    def forward(self, cw_idxs, cc_idxs, qw_idxs, qc_idxs, gap_indices):
+        att, mod, c_mask, q_enc, q_mask = self.encoder(cw_idxs, cc_idxs, qw_idxs, qc_idxs)
+
+        out = self.output_layer(att, mod, gap_indices, c_mask, q_enc, q_mask)
+
+        return out

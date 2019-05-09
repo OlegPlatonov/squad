@@ -249,17 +249,264 @@ class SQuADOutput(nn.Module):
 
 
 class GTOutput(nn.Module):
-    def __init__(self, hidden_size):
+    def __init__(self, hidden_size, drop_prob):
         super(GTOutput, self).__init__()
         self.att_linear = nn.Linear(8 * hidden_size, 1)
         self.mod_linear = nn.Linear(2 * hidden_size, 1)
 
-    def forward(self, att, mod, gap_indices):
+    def forward(self, att, mod, gap_indices, mask, q_enc, q_mask):
         batch_size = mod.shape[0]
         index_all = torch.arange(batch_size).unsqueeze(-1)
         att_gaps = att[index_all, gap_indices]
         mod_gaps = mod[index_all, gap_indices]
 
         logits = self.att_linear(att_gaps) + self.mod_linear(mod_gaps)
+
+        return logits.squeeze()
+
+
+class GTOutput2(nn.Module):
+    def __init__(self, hidden_size, drop_prob):
+        super(GTOutput2, self).__init__()
+        self.att_linear = nn.Linear(8 * hidden_size, 1)
+        self.mod_linear = nn.Linear(2 * hidden_size, 1)
+        self.att_linear_start = nn.Linear(8 * hidden_size, 1)
+        self.mod_linear_start = nn.Linear(2 * hidden_size, 1)
+
+    def forward(self, att, mod, gap_indices, mask, q_enc, q_mask):
+        batch_size = mod.shape[0]
+        index_all = torch.arange(batch_size).unsqueeze(-1)
+        att_gaps = att[index_all, gap_indices]
+        mod_gaps = mod[index_all, gap_indices]
+
+        logits_start = self.att_linear_start(att_gaps[:, 0].unsqueeze(1)) + self.mod_linear_start(mod_gaps[:, 0].unsqueeze(1))
+        logits = self.att_linear(att_gaps[:, 1:]) + self.mod_linear(mod_gaps[:, 1:])
+        logits = torch.cat((logits_start, logits), dim=1)
+
+        return logits.squeeze()
+
+
+class GTOutputWithPooling(nn.Module):
+    def __init__(self, hidden_size, drop_prob):
+        super(GTOutputWithPooling, self).__init__()
+        self.att_linear = nn.Linear(3 * 8 * hidden_size, 1)
+        self.mod_linear = nn.Linear(3 * 2 * hidden_size, 1)
+
+    def forward(self, att, mod, gap_indices, mask, q_enc, q_mask):
+        batch_size, seq_len, _ = mod.shape
+        index_all = torch.arange(batch_size).unsqueeze(-1)
+        att_gaps = att[index_all, gap_indices]
+        mod_gaps = mod[index_all, gap_indices]
+
+        pools_mod = []
+        pools_att = []
+        for num, gap_id in enumerate(torch.split(gap_indices, split_size_or_sections=1, dim=1)):
+            if num == 0:
+                max_pool_mod, _ = torch.max(mod, dim=1, keepdim=True)
+                avg_pool_mod = torch.sum(mod, dim=1, keepdim=True) / torch.unsqueeze(torch.sum(mask, dim=1, keepdim=True), dim=2).type(torch.float32)
+                max_pool_att, _ = torch.max(att, dim=1, keepdim=True)
+                avg_pool_att = torch.sum(att, dim=1, keepdim=True) / torch.unsqueeze(torch.sum(mask, dim=1, keepdim=True), dim=2).type(torch.float32)
+            else:
+                indices = torch.arange(seq_len).view(1, -1)
+                window_mask = (indices >= (gap_id - 12)) * (indices <= (gap_id + 12)) * mask
+                mod_window = mod * window_mask.unsqueeze(2).type(torch.float32)
+                max_pool_mod, _ = torch.max(mod_window, dim=1, keepdim=True)
+                avg_pool_mod = torch.sum(mod_window, dim=1, keepdim=True) / torch.unsqueeze(torch.sum(window_mask, dim=1, keepdim=True), dim=2).type(torch.float32)
+                att_window = att * window_mask.unsqueeze(2).type(torch.float32)
+                max_pool_att, _ = torch.max(att_window, dim=1, keepdim=True)
+                avg_pool_att = torch.sum(att_window, dim=1, keepdim=True) / torch.unsqueeze(torch.sum(window_mask, dim=1, keepdim=True), dim=2).type(torch.float32)
+            pools_mod.append(torch.cat((max_pool_mod, avg_pool_mod), dim=-1))
+            pools_att.append(torch.cat((max_pool_att, avg_pool_att), dim=-1))
+
+        pools_mod = torch.cat(pools_mod, dim=1)
+        pools_att = torch.cat(pools_att, dim=1)
+
+        mod_gaps = torch.cat((mod_gaps, pools_mod), dim=-1)
+        att_gaps = torch.cat((att_gaps, pools_att), dim=-1)
+
+        logits = self.att_linear(att_gaps) + self.mod_linear(mod_gaps)
+
+        return logits.squeeze()
+
+
+class GTOutputWithPooling2(nn.Module):
+    def __init__(self, hidden_size, drop_prob):
+        super(GTOutputWithPooling2, self).__init__()
+        self.att_linear = nn.Linear(3 * 8 * hidden_size, 1)
+        self.mod_linear = nn.Linear(3 * 2 * hidden_size, 1)
+        self.att_linear_start = nn.Linear(3 * 8 * hidden_size, 1)
+        self.mod_linear_start = nn.Linear(3 * 2 * hidden_size, 1)
+
+    def forward(self, att, mod, gap_indices, mask, q_enc, q_mask):
+        batch_size, seq_len, _ = mod.shape
+        index_all = torch.arange(batch_size).unsqueeze(-1)
+        att_gaps = att[index_all, gap_indices]
+        mod_gaps = mod[index_all, gap_indices]
+
+        pools_mod = []
+        pools_att = []
+        for num, gap_id in enumerate(torch.split(gap_indices, split_size_or_sections=1, dim=1)):
+            if num == 0:
+                max_pool_mod, _ = torch.max(mod, dim=1, keepdim=True)
+                avg_pool_mod = torch.sum(mod, dim=1, keepdim=True) / torch.unsqueeze(torch.sum(mask, dim=1, keepdim=True), dim=2).type(torch.float32)
+                max_pool_att, _ = torch.max(att, dim=1, keepdim=True)
+                avg_pool_att = torch.sum(att, dim=1, keepdim=True) / torch.unsqueeze(torch.sum(mask, dim=1, keepdim=True), dim=2).type(torch.float32)
+            else:
+                indices = torch.arange(seq_len).view(1, -1)
+                window_mask = (indices >= (gap_id - 12)) * (indices <= (gap_id + 12)) * mask
+                mod_window = mod * window_mask.unsqueeze(2).type(torch.float32)
+                max_pool_mod, _ = torch.max(mod_window, dim=1, keepdim=True)
+                avg_pool_mod = torch.sum(mod_window, dim=1, keepdim=True) / torch.unsqueeze(torch.sum(window_mask, dim=1, keepdim=True), dim=2).type(torch.float32)
+                att_window = att * window_mask.unsqueeze(2).type(torch.float32)
+                max_pool_att, _ = torch.max(att_window, dim=1, keepdim=True)
+                avg_pool_att = torch.sum(att_window, dim=1, keepdim=True) / torch.unsqueeze(torch.sum(window_mask, dim=1, keepdim=True), dim=2).type(torch.float32)
+            pools_mod.append(torch.cat((max_pool_mod, avg_pool_mod), dim=-1))
+            pools_att.append(torch.cat((max_pool_att, avg_pool_att), dim=-1))
+
+        pools_mod = torch.cat(pools_mod, dim=1)
+        pools_att = torch.cat(pools_att, dim=1)
+
+        mod_gaps = torch.cat((mod_gaps, pools_mod), dim=-1)
+        att_gaps = torch.cat((att_gaps, pools_att), dim=-1)
+
+        logits_start = self.att_linear_start(att_gaps[:, 0].unsqueeze(1)) + self.mod_linear_start(mod_gaps[:, 0].unsqueeze(1))
+        logits = self.att_linear(att_gaps[:, 1:]) + self.mod_linear(mod_gaps[:, 1:])
+        logits = torch.cat((logits_start, logits), dim=1)
+
+        return logits.squeeze()
+
+
+class GTOutputWithPoolingZero(nn.Module):
+    def __init__(self, hidden_size, drop_prob):
+        super(GTOutputWithPoolingZero, self).__init__()
+        self.att_linear = nn.Linear(3 * 8 * hidden_size, 1)
+        self.mod_linear = nn.Linear(3 * 2 * hidden_size, 1)
+
+    def forward(self, att, mod, gap_indices, mask, q_enc, q_mask):
+        batch_size, seq_len, _ = mod.shape
+        index_all = torch.arange(batch_size).unsqueeze(-1)
+        att_gaps = att[index_all, gap_indices]
+        mod_gaps = mod[index_all, gap_indices]
+
+        pools_mod = []
+        pools_att = []
+        for num, gap_id in enumerate(torch.split(gap_indices, split_size_or_sections=1, dim=1)):
+            if num == 0:
+                max_pool_mod = torch.zeros((batch_size, 1, 200))
+                avg_pool_mod = torch.zeros((batch_size, 1, 200))
+                max_pool_att = torch.zeros((batch_size, 1, 800))
+                avg_pool_att = torch.zeros((batch_size, 1, 800))
+            else:
+                indices = torch.arange(seq_len).view(1, -1)
+                window_mask = (indices >= (gap_id - 12)) * (indices <= (gap_id + 12)) * mask
+                mod_window = mod * window_mask.unsqueeze(2).type(torch.float32)
+                max_pool_mod, _ = torch.max(mod_window, dim=1, keepdim=True)
+                avg_pool_mod = torch.sum(mod_window, dim=1, keepdim=True) / torch.unsqueeze(torch.sum(window_mask, dim=1, keepdim=True), dim=2).type(torch.float32)
+                att_window = att * window_mask.unsqueeze(2).type(torch.float32)
+                max_pool_att, _ = torch.max(att_window, dim=1, keepdim=True)
+                avg_pool_att = torch.sum(att_window, dim=1, keepdim=True) / torch.unsqueeze(torch.sum(window_mask, dim=1, keepdim=True), dim=2).type(torch.float32)
+            pools_mod.append(torch.cat((max_pool_mod, avg_pool_mod), dim=-1))
+            pools_att.append(torch.cat((max_pool_att, avg_pool_att), dim=-1))
+
+        pools_mod = torch.cat(pools_mod, dim=1)
+        pools_att = torch.cat(pools_att, dim=1)
+
+        mod_gaps = torch.cat((mod_gaps, pools_mod), dim=-1)
+        att_gaps = torch.cat((att_gaps, pools_att), dim=-1)
+
+        logits = self.att_linear(att_gaps) + self.mod_linear(mod_gaps)
+
+        return logits.squeeze()
+
+
+class GTOutputWithPoolingZero2(nn.Module):
+    def __init__(self, hidden_size, drop_prob):
+        super(GTOutputWithPoolingZero2, self).__init__()
+        self.att_linear = nn.Linear(3 * 8 * hidden_size, 1)
+        self.mod_linear = nn.Linear(3 * 2 * hidden_size, 1)
+        self.att_linear_start = nn.Linear(3 * 8 * hidden_size, 1)
+        self.mod_linear_start = nn.Linear(3 * 2 * hidden_size, 1)
+
+    def forward(self, att, mod, gap_indices, mask, q_enc, q_mask):
+        batch_size, seq_len, _ = mod.shape
+        index_all = torch.arange(batch_size).unsqueeze(-1)
+        att_gaps = att[index_all, gap_indices]
+        mod_gaps = mod[index_all, gap_indices]
+
+        pools_mod = []
+        pools_att = []
+        for num, gap_id in enumerate(torch.split(gap_indices, split_size_or_sections=1, dim=1)):
+            if num == 0:
+                max_pool_mod = torch.zeros((batch_size, 1, 200))
+                avg_pool_mod = torch.zeros((batch_size, 1, 200))
+                max_pool_att = torch.zeros((batch_size, 1, 800))
+                avg_pool_att = torch.zeros((batch_size, 1, 800))
+            else:
+                indices = torch.arange(seq_len).view(1, -1)
+                window_mask = (indices >= (gap_id - 12)) * (indices <= (gap_id + 12)) * mask
+                mod_window = mod * window_mask.unsqueeze(2).type(torch.float32)
+                max_pool_mod, _ = torch.max(mod_window, dim=1, keepdim=True)
+                avg_pool_mod = torch.sum(mod_window, dim=1, keepdim=True) / torch.unsqueeze(torch.sum(window_mask, dim=1, keepdim=True), dim=2).type(torch.float32)
+                att_window = att * window_mask.unsqueeze(2).type(torch.float32)
+                max_pool_att, _ = torch.max(att_window, dim=1, keepdim=True)
+                avg_pool_att = torch.sum(att_window, dim=1, keepdim=True) / torch.unsqueeze(torch.sum(window_mask, dim=1, keepdim=True), dim=2).type(torch.float32)
+            pools_mod.append(torch.cat((max_pool_mod, avg_pool_mod), dim=-1))
+            pools_att.append(torch.cat((max_pool_att, avg_pool_att), dim=-1))
+
+        pools_mod = torch.cat(pools_mod, dim=1)
+        pools_att = torch.cat(pools_att, dim=1)
+
+        mod_gaps = torch.cat((mod_gaps, pools_mod), dim=-1)
+        att_gaps = torch.cat((att_gaps, pools_att), dim=-1)
+
+        logits_start = self.att_linear_start(att_gaps[:, 0].unsqueeze(1)) + self.mod_linear_start(mod_gaps[:, 0].unsqueeze(1))
+        logits = self.att_linear(att_gaps[:, 1:]) + self.mod_linear(mod_gaps[:, 1:])
+        logits = torch.cat((logits_start, logits), dim=1)
+
+        return logits.squeeze()
+
+
+class GTOutputNoAtt(nn.Module):
+    def __init__(self, hidden_size, drop_prob):
+        super(GTOutput2, self).__init__()
+        self.mod_linear = nn.Linear(2 * hidden_size, 1)
+        self.mod_linear_start = nn.Linear(2 * hidden_size, 1)
+
+    def forward(self, att, mod, gap_indices, mask, q_enc, q_mask):
+        batch_size = mod.shape[0]
+        index_all = torch.arange(batch_size).unsqueeze(-1)
+        mod_gaps = mod[index_all, gap_indices]
+
+        logits_start = self.mod_linear_start(mod_gaps[:, 0].unsqueeze(1))
+        logits = self.mod_linear(mod_gaps[:, 1:])
+        logits = torch.cat((logits_start, logits), dim=1)
+
+        return logits.squeeze()
+
+
+class GTOutputDoubleAtt(nn.Module):
+    def __init__(self, hidden_size, drop_prob):
+        super(GTOutput2, self).__init__()
+        self.att_linear = nn.Linear(8 * hidden_size, 1)
+        self.mod_linear = nn.Linear(2 * hidden_size, 1)
+        self.att_linear_2 = nn.Linear(8 * hidden_size, 1)
+        self.att_linear_start = nn.Linear(8 * hidden_size, 1)
+        self.mod_linear_start = nn.Linear(2 * hidden_size, 1)
+        self.att_linear_start_2 = nn.Linear(8 * hidden_size, 1)
+
+        self.att = BiDAFAttention(hidden_size=2 * hidden_size,
+                                  drop_prob=drop_prob)
+
+    def forward(self, att, mod, gap_indices, mask, q_enc, q_mask):
+        batch_size = mod.shape[0]
+        index_all = torch.arange(batch_size).unsqueeze(-1)
+        att_gaps = att[index_all, gap_indices]
+        mod_gaps = mod[index_all, gap_indices]
+
+        att_2 = self.att(mod_gaps, q_enc, torch.ones_like(gap_indices), q_mask)
+
+        logits_start = self.att_linear_start(att_gaps[:, 0].unsqueeze(1)) + self.mod_linear_start(mod_gaps[:, 0].unsqueeze(1)) + self.att_linear_start_2(att_2[:, 0].unsqueeze(1))
+        logits = self.att_linear(att_gaps[:, 1:]) + self.mod_linear(mod_gaps[:, 1:]) + self.att_linear_2(att_2[:, 1:])
+        logits = torch.cat((logits_start, logits), dim=1)
 
         return logits.squeeze()

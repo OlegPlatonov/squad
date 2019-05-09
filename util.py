@@ -115,6 +115,34 @@ class GappedText(data.Dataset):
         return len(self.gap_indices)
 
 
+class GappedText_2(data.Dataset):
+    def __init__(self, data_path):
+        super(GappedText_2, self).__init__()
+        dataset = np.load(data_path)
+        self.texts_words = torch.from_numpy(dataset['texts_words'][:100]).long()
+        self.texts_chars = torch.from_numpy(dataset['texts_chars'][:100]).long()
+        self.gap_indices = torch.from_numpy(dataset['gap_indices'][:100]).long()
+        self.fragments_words = tuple(torch.squeeze(X[:100]) for X in
+                                     torch.split(torch.from_numpy(dataset['fragments_words']).long(), split_size_or_sections=1, dim=0))
+        self.fragments_chars = tuple(torch.squeeze(X[:100]) for X in
+                                     torch.split(torch.from_numpy(dataset['fragments_chars']).long(), split_size_or_sections=1, dim=0))
+        self.correct_gaps = tuple(torch.squeeze(X[:100]) for X in
+                                  torch.split(torch.from_numpy(dataset['correct_gaps']).long(), split_size_or_sections=1, dim=-1))
+
+    def __getitem__(self, idx):
+        example = (self.texts_words[idx],
+                   self.texts_chars[idx],
+                   self.gap_indices[idx],
+                   tuple(X[idx] for X in self.fragments_words),
+                   tuple(X[idx] for X in self.fragments_chars),
+                   tuple(X[idx] for X in self.correct_gaps))
+
+        return example
+
+    def __len__(self):
+        return len(self.gap_indices)
+
+
 def collate_fn(examples):
     """Create batch tensors from a list of individual examples returned
     by `SQuAD.__getitem__`. Merge examples of different length by padding
@@ -396,6 +424,7 @@ class CheckpointSaver:
             _, worst_ckpt = self.ckpt_paths.get()
             try:
                 os.remove(worst_ckpt)
+                os.remove(worst_ckpt + '.optim')
                 self._print('Removed checkpoint: {}'.format(worst_ckpt))
             except OSError:
                 # Avoid crashing if checkpoint has been removed or protected
