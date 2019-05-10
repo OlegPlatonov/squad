@@ -332,12 +332,12 @@ class GTOutputWithPooling(nn.Module):
 
 
 class GTOutputWithPooling2(nn.Module):
-    def __init__(self, hidden_size, drop_prob):
+    def __init__(self, hidden_size, drop_prob, hidden_size_2):
         super(GTOutputWithPooling2, self).__init__()
         self.att_linear = nn.Linear(3 * 8 * hidden_size, 1)
-        self.mod_linear = nn.Linear(3 * 2 * hidden_size, 1)
+        self.mod_linear = nn.Linear(3 * 2 * hidden_size_2, 1)
         self.att_linear_start = nn.Linear(3 * 8 * hidden_size, 1)
-        self.mod_linear_start = nn.Linear(3 * 2 * hidden_size, 1)
+        self.mod_linear_start = nn.Linear(3 * 2 * hidden_size_2, 1)
 
     def forward(self, att, mod, gap_indices, mask, q_enc, q_mask):
         batch_size, seq_len, _ = mod.shape

@@ -45,7 +45,8 @@ def main(args):
                               char_vectors=char_vectors,
                               hidden_size=args.hidden_size,
                               drop_prob=args.drop_prob,
-                              out=args.out)
+                              out=args.out,
+                              hidden_size_2=args.hidden_size_2)
     print('Output_layer:')
     print(args.out)
     print(model.output_layer)

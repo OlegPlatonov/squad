@@ -157,7 +157,7 @@ class BiDAFGT(nn.Module):
 
 
 class BiDAFEncoderExperiment(nn.Module):
-    def __init__(self, word_vectors, char_vectors, hidden_size, drop_prob=0., use_chars=True):
+    def __init__(self, word_vectors, char_vectors, hidden_size, drop_prob=0., use_chars=True, hidden_size_2=None):
         super(BiDAFEncoderExperiment, self).__init__()
         self.emb = layers.Embedding(word_vectors=word_vectors,
                                     hidden_size=hidden_size,
@@ -175,7 +175,7 @@ class BiDAFEncoderExperiment(nn.Module):
                                          drop_prob=drop_prob)
 
         self.mod = layers.RNNEncoder(input_size=8 * hidden_size,
-                                     hidden_size=hidden_size,
+                                     hidden_size=hidden_size_2,
                                      num_layers=2,
                                      drop_prob=drop_prob)
 
@@ -199,13 +199,16 @@ class BiDAFEncoderExperiment(nn.Module):
 
 
 class BiDAFGTExperiment(nn.Module):
-    def __init__(self, word_vectors, char_vectors, hidden_size, drop_prob=0., use_chars=True, out='GTOutput'):
+    def __init__(self, word_vectors, char_vectors, hidden_size, drop_prob=0., use_chars=True, out='GTOutput', hidden_size_2=None):
         super(BiDAFGTExperiment, self).__init__()
+        if hidden_size_2 is None:
+            hidden_size_2 = hidden_size
         self.encoder = BiDAFEncoderExperiment(word_vectors=word_vectors,
                                               char_vectors=char_vectors,
                                               hidden_size=hidden_size,
                                               drop_prob=drop_prob,
-                                              use_chars=use_chars)
+                                              use_chars=use_chars,
+                                              hidden_size_2=hidden_size_2)
 
         output_layers = {
             'GTOutput': layers.GTOutput,
@@ -220,7 +223,7 @@ class BiDAFGTExperiment(nn.Module):
             'GTOutputWithPooling2DoubleAtt': layers.GTOutputWithPooling2DoubleAtt,
             'GTOutputWithPooling2DoubleAttBig': layers.GTOutputWithPooling2DoubleAttBig
         }
-        self.output_layer = output_layers[out](hidden_size=hidden_size, drop_prob=drop_prob)
+        self.output_layer = output_layers[out](hidden_size=hidden_size, drop_prob=drop_prob, hidden_size_2=hidden_size_2)
 
     def forward(self, cw_idxs, cc_idxs, qw_idxs, qc_idxs, gap_indices):
         att, mod, c_mask, q_enc, q_mask = self.encoder(cw_idxs, cc_idxs, qw_idxs, qc_idxs)
