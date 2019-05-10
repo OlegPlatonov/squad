@@ -12,10 +12,10 @@ import util
 from args import get_train_args
 from collections import OrderedDict
 from json import dumps
-from models import BiDAFGT
+from models import BiDAFGT, BiDAFGTExperiment
 from tensorboardX import SummaryWriter
 from tqdm import tqdm
-from util import gapped_text_collate_fn, GappedText
+from util import gapped_text_collate_fn, GappedText, GappedText_2
 
 
 def main(args):
@@ -41,10 +41,14 @@ def main(args):
 
     # Get model
     log.info('Building model...')
-    model = BiDAFGT(word_vectors=word_vectors,
-                    char_vectors=char_vectors,
-                    hidden_size=args.hidden_size,
-                    drop_prob=args.drop_prob)
+    model = BiDAFGTExperiment(word_vectors=word_vectors,
+                              char_vectors=char_vectors,
+                              hidden_size=args.hidden_size,
+                              drop_prob=args.drop_prob,
+                              out=args.out)
+    print('Output_layer:')
+    print(args.out)
+    print(model.output_layer)
     model = nn.DataParallel(model, args.gpu_ids)
 
     if args.load_path:
@@ -59,28 +63,18 @@ def main(args):
     # Get saver
     saver = util.CheckpointSaver(args.save_dir,
                                  max_checkpoints=args.max_checkpoints,
-                                 metric_name=args.metric_name,
+                                 metric_name='Accuracy',
                                  maximize_metric=args.maximize_metric,
                                  log=log)
 
     # Get optimizer and scheduler
-    optimizer = optim.Adadelta(model.parameters(), args.lr,
-                               weight_decay=args.l2_wd)
+    optimizer = optim.Adam(model.parameters(), args.lr,  weight_decay=args.l2_wd)
     scheduler = sched.LambdaLR(optimizer, lambda s: 1.)  # Constant LR
 
     # Get data loader
-    data_folder = './data/Gapped_Text/Tokenized'
-    data_files = [os.path.join(data_folder, file) for file in os.listdir(data_folder)]
-    log.info('Data files found:')
-    for file in data_files:
-        log.info(file)
-    datasets = []
-    log.info('Building dataset...')
-    for file in data_files:
-        log.info(f'Creating dataset from {file}...')
-        datasets.append(GappedText(file))
-    log.info('Concatenating datasets...')
-    train_dataset = data.ConcatDataset(datasets)
+    log.info('Creating train dataset...')
+    data_file = './data/data.npz'
+    train_dataset = GappedText(data_file)
 
     train_loader = data.DataLoader(train_dataset,
                                    batch_size=args.batch_size,
@@ -89,8 +83,8 @@ def main(args):
                                    collate_fn=gapped_text_collate_fn)
 
     log.info('Creating dev dataset...')
-    dev_file = './data/Gapped_Text/Tokenized_dev/Dataset_dev.npz'
-    dev_dataset = GappedText(dev_file)
+    dev_file = './data/data.npz'
+    dev_dataset = GappedText_2(dev_file)
     dev_loader = data.DataLoader(dev_dataset,
                                  batch_size=args.batch_size,
                                  shuffle=False,
