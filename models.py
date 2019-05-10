@@ -215,7 +215,10 @@ class BiDAFGTExperiment(nn.Module):
             'GTOutputWithPoolingZero': layers.GTOutputWithPoolingZero,
             'GTOutputWithPoolingZero2': layers.GTOutputWithPoolingZero2,
             'GTOutputNoAtt': layers.GTOutputNoAtt,
-            'GTOutputDoubleAtt': layers.GTOutputDoubleAtt
+            'GTOutputDoubleAtt': layers.GTOutputDoubleAtt,
+            'GTOutputWithPooling2NoAtt': layers.GTOutputWithPooling2NoAtt,
+            'GTOutputWithPooling2DoubleAtt': layers.GTOutputWithPooling2DoubleAtt,
+            'GTOutputWithPooling2DoubleAttBig': layers.GTOutputWithPooling2DoubleAttBig
         }
         self.output_layer = output_layers[out](hidden_size=hidden_size, drop_prob=drop_prob)
 
