@@ -76,7 +76,7 @@ class BiDAFBaseline(nn.Module):
 
 
 class BiDAFEncoder(nn.Module):
-    def __init__(self, word_vectors, char_vectors, hidden_size, drop_prob=0., use_chars=True):
+    def __init__(self, word_vectors, char_vectors, hidden_size, hidden_size_2, drop_prob=0., use_chars=True):
         super(BiDAFEncoder, self).__init__()
         self.emb = layers.Embedding(word_vectors=word_vectors,
                                     hidden_size=hidden_size,
@@ -94,7 +94,7 @@ class BiDAFEncoder(nn.Module):
                                          drop_prob=drop_prob)
 
         self.mod = layers.RNNEncoder(input_size=8 * hidden_size,
-                                     hidden_size=hidden_size,
+                                     hidden_size=hidden_size_2,
                                      num_layers=2,
                                      drop_prob=drop_prob)
 
@@ -138,15 +138,16 @@ class BiDAFSQuAD(nn.Module):
 
 
 class BiDAFGT(nn.Module):
-    def __init__(self, word_vectors, char_vectors, hidden_size, drop_prob=0., use_chars=True):
+    def __init__(self, word_vectors, char_vectors, hidden_size, hidden_size_2, drop_prob=0., use_chars=True):
         super(BiDAFGT, self).__init__()
         self.encoder = BiDAFEncoder(word_vectors=word_vectors,
                                     char_vectors=char_vectors,
                                     hidden_size=hidden_size,
+                                    hidden_size_2=hidden_size_2,
                                     drop_prob=drop_prob,
                                     use_chars=use_chars)
 
-        self.output_layer = layers.GTOutputDoubleWindowPooling(hidden_size=hidden_size)
+        self.output_layer = layers.GTOutputDoubleWindowPooling(hidden_size=hidden_size, hidden_size_2=hidden_size_2)
 
     def forward(self, cw_idxs, cc_idxs, qw_idxs, qc_idxs, gap_indices):
         att, mod, c_mask = self.encoder(cw_idxs, cc_idxs, qw_idxs, qc_idxs)

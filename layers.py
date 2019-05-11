@@ -316,12 +316,12 @@ class GTOutputWindowPooling(nn.Module):
 
 
 class GTOutputDoubleWindowPooling(nn.Module):
-    def __init__(self, hidden_size):
+    def __init__(self, hidden_size, hidden_size_2):
         super(GTOutputDoubleWindowPooling, self).__init__()
         self.att_linear = nn.Linear(5 * 8 * hidden_size, 1)
-        self.mod_linear = nn.Linear(5 * 2 * hidden_size, 1)
+        self.mod_linear = nn.Linear(5 * 2 * hidden_size_2, 1)
         self.att_linear_start = nn.Linear(5 * 8 * hidden_size, 1)
-        self.mod_linear_start = nn.Linear(5 * 2 * hidden_size, 1)
+        self.mod_linear_start = nn.Linear(5 * 2 * hidden_size_2, 1)
 
     def forward(self, att, mod, gap_indices, mask):
         batch_size, seq_len, _ = mod.shape
