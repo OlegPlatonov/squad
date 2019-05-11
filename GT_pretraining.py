@@ -66,7 +66,7 @@ def main(args):
     # Get saver
     saver = util.CheckpointSaver(args.save_dir,
                                  max_checkpoints=args.max_checkpoints,
-                                 metric_name=args.metric_name,
+                                 metric_name='Accuracy',
                                  maximize_metric=args.maximize_metric,
                                  log=log)
 
