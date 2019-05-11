@@ -146,11 +146,11 @@ class BiDAFGT(nn.Module):
                                     drop_prob=drop_prob,
                                     use_chars=use_chars)
 
-        self.output_layer = layers.GTOutput(hidden_size=hidden_size)
+        self.output_layer = layers.GTOutputDoubleWindowPooling(hidden_size=hidden_size)
 
     def forward(self, cw_idxs, cc_idxs, qw_idxs, qc_idxs, gap_indices):
-        att, mod, _ = self.encoder(cw_idxs, cc_idxs, qw_idxs, qc_idxs)
+        att, mod, c_mask = self.encoder(cw_idxs, cc_idxs, qw_idxs, qc_idxs)
 
-        out = self.output_layer(att, mod, gap_indices)
+        out = self.output_layer(att, mod, gap_indices, c_mask)
 
         return out

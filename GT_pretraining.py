@@ -48,7 +48,7 @@ def main(args):
     model = nn.DataParallel(model, args.gpu_ids)
 
     if args.load_path:
-        log.info('Loading checkpoint from {}...'.format(args.load_path))
+        log.info('Loading model checkpoint from {}...'.format(args.load_path))
         model, step = util.load_model(model, args.load_path, args.gpu_ids)
     else:
         step = 0
@@ -64,8 +64,12 @@ def main(args):
                                  log=log)
 
     # Get optimizer and scheduler
-    optimizer = optim.Adadelta(model.parameters(), args.lr,
-                               weight_decay=args.l2_wd)
+    optimizer = optim.Adam(model.parameters(), args.lr, weight_decay=args.l2_wd)
+    if args.load_path:
+        log.info('Loading optimizer checkpoint from {}...'.format(args.load_path + '.optim'))
+        optimizer.load_state_dict(torch.load(args.load_path + '.optim'))
+    optimizer.defaults['lr'] = args.lr
+    log.info(f'Default learning rate is set to {optimizer.defaults["lr"]}')
     scheduler = sched.LambdaLR(optimizer, lambda s: 1.)  # Constant LR
 
     # Get data loader
