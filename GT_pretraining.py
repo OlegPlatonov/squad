@@ -46,12 +46,13 @@ def main(args):
                     hidden_size=args.hidden_size,
                     hidden_size_2=args.hidden_size_2,
                     drop_prob=args.drop_prob)
-    model = nn.DataParallel(model, args.gpu_ids)
 
     log.info('Encoder:')
     log.info(model.encoder)
     log.info('Output_layer:')
     log.info(model.output_layer)
+
+    model = nn.DataParallel(model, args.gpu_ids)
 
     if args.load_path:
         log.info('Loading model checkpoint from {}...'.format(args.load_path))
