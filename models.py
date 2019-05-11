@@ -48,7 +48,7 @@ class BiDAFBaseline(nn.Module):
 
         self.mod = layers.RNNEncoder(input_size=8 * hidden_size,
                                      hidden_size=hidden_size,
-                                     num_layers=2,
+                                     num_layers=1,
                                      drop_prob=drop_prob)
 
         self.out = layers.SQuADOutput(hidden_size=hidden_size,
