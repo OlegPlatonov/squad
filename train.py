@@ -17,7 +17,7 @@ import util
 from args import get_train_args
 from collections import OrderedDict
 from json import dumps
-from models import BiDAFBaseline
+from models import BiDAFSQuAD
 from tensorboardX import SummaryWriter
 from tqdm import tqdm
 from ujson import load as json_load
@@ -47,10 +47,17 @@ def main(args):
 
     # Get model
     log.info('Building model...')
-    model = BiDAFBaseline(word_vectors=word_vectors,
-                          char_vectors=char_vectors,
-                          hidden_size=args.hidden_size,
-                          drop_prob=args.drop_prob)
+    model = BiDAFSQuAD(word_vectors=word_vectors,
+                       char_vectors=char_vectors,
+                       hidden_size=args.hidden_size,
+                       hidden_size_2=args.hidden_size_2,
+                       drop_prob=args.drop_prob)
+
+    log.info('Encoder:')
+    log.info(model.encoder)
+    log.info('Output_layer:')
+    log.info(model.output_layer)
+
     model = nn.DataParallel(model, args.gpu_ids)
     if args.load_path:
         log.info('Loading checkpoint from {}...'.format(args.load_path))
@@ -69,8 +76,14 @@ def main(args):
                                  log=log)
 
     # Get optimizer and scheduler
-    optimizer = optim.Adadelta(model.parameters(), args.lr,
-                               weight_decay=args.l2_wd)
+    if args.optimizer == 'adadelta':
+        optimizer = optim.Adadelta(model.parameters(), args.lr, weight_decay=args.l2_wd)
+    elif args.optimizer == 'adam':
+        optimizer = optim.Adam(model.parameters(), args.lr, weight_decay=args.l2_wd)
+    else:
+        raise NameError(f'Unknown optimizer: {args.optimizer}')
+    log.info(f'Optimizer: {optimizer}')
+    log.info(f'Default learning rate is set to {optimizer.defaults["lr"]}')
     scheduler = sched.LambdaLR(optimizer, lambda s: 1.)  # Constant LR
 
     # Get data loader

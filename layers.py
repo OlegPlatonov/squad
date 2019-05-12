@@ -223,24 +223,33 @@ class SQuADOutput(nn.Module):
         hidden_size (int): Hidden size used in the BiDAF model.
         drop_prob (float): Probability of zero-ing out activations.
     """
-    def __init__(self, hidden_size, drop_prob):
+    def __init__(self, hidden_size, hidden_size_2, drop_prob):
         super(SQuADOutput, self).__init__()
         self.att_linear_1 = nn.Linear(8 * hidden_size, 1)
-        self.mod_linear_1 = nn.Linear(2 * hidden_size, 1)
+        self.mod_linear_1 = nn.Linear(2 * hidden_size_2, 1)
+        self.att_linear_1_start = nn.Linear(8 * hidden_size, 1)
+        self.mod_linear_1_start = nn.Linear(2 * hidden_size_2, 1)
 
-        self.rnn = RNNEncoder(input_size=2 * hidden_size,
-                              hidden_size=hidden_size,
+        self.rnn = RNNEncoder(input_size=2 * hidden_size_2,
+                              hidden_size=hidden_size_2,
                               num_layers=1,
                               drop_prob=drop_prob)
 
         self.att_linear_2 = nn.Linear(8 * hidden_size, 1)
-        self.mod_linear_2 = nn.Linear(2 * hidden_size, 1)
+        self.mod_linear_2 = nn.Linear(2 * hidden_size_2, 1)
+        self.att_linear_2_start = nn.Linear(8 * hidden_size, 1)
+        self.mod_linear_2_start = nn.Linear(2 * hidden_size_2, 1)
 
     def forward(self, att, mod, mask):
         # Shapes: (batch_size, seq_len, 1)
-        logits_1 = self.att_linear_1(att) + self.mod_linear_1(mod)
+        logits_1_start = self.att_linear_1(att[:, 0].unsqueeze(1)) + self.mod_linear_1(mod[:, 0].unsqueeze(1))
+        logits_1 = self.att_linear_1(att[:, 1:]) + self.mod_linear_1(mod[:, 1:])
+        logits_1 = torch.cat((logits_1_start, logits_1), dim=1)
+
         mod_2 = self.rnn(mod, mask.sum(-1))
-        logits_2 = self.att_linear_2(att) + self.mod_linear_2(mod_2)
+        logits_2_start = self.att_linear_2(att[:, 0].unsqueeze(1)) + self.mod_linear_2(mod_2[:, 0].unsqueeze(1))
+        logits_2 = self.att_linear_2(att[:, 1:]) + self.mod_linear_2(mod_2[:, 1:])
+        logits_2 = torch.cat((logits_2_start, logits_2), dim=1)
 
         # Shapes: (batch_size, seq_len)
         log_p1 = masked_softmax(logits_1.squeeze(), mask, log_softmax=True)

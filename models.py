@@ -118,15 +118,17 @@ class BiDAFEncoder(nn.Module):
 
 
 class BiDAFSQuAD(nn.Module):
-    def __init__(self, word_vectors, char_vectors, hidden_size, drop_prob=0., use_chars=True):
+    def __init__(self, word_vectors, char_vectors, hidden_size, hidden_size_2, drop_prob=0., use_chars=True):
         super(BiDAFSQuAD, self).__init__()
         self.encoder = BiDAFEncoder(word_vectors=word_vectors,
                                     char_vectors=char_vectors,
                                     hidden_size=hidden_size,
+                                    hidden_size_2=hidden_size_2,
                                     drop_prob=drop_prob,
                                     use_chars=use_chars)
 
         self.output_layer = layers.SQuADOutput(hidden_size=hidden_size,
+                                               hidden_size_2=hidden_size_2,
                                                drop_prob=drop_prob)
 
     def forward(self, cw_idxs, cc_idxs, qw_idxs, qc_idxs):

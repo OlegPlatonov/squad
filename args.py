@@ -97,6 +97,10 @@ def get_train_args():
                         type=int,
                         default=50000,
                         help='Number of steps between successive evaluations.')
+    parser.add_argument('--optimizer',
+                        type=str,
+                        default='adadelta',
+                        choices=('adam', 'adadelta'))
     parser.add_argument('--lr',
                         type=float,
                         default=0.5,
