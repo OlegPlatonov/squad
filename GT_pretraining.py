@@ -76,6 +76,7 @@ def main(args):
         log.info('Loading optimizer checkpoint from {}...'.format(args.load_path + '.optim'))
         optimizer.load_state_dict(torch.load(args.load_path + '.optim'))
     optimizer.defaults['lr'] = args.lr
+    log.info(f'Optimizer: {optimizer}')
     log.info(f'Default learning rate is set to {optimizer.defaults["lr"]}')
     scheduler = sched.LambdaLR(optimizer, lambda s: 1.)  # Constant LR
 
