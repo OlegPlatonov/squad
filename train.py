@@ -153,7 +153,7 @@ def main(args):
                                                   args.dev_eval_file,
                                                   args.max_ans_len,
                                                   args.use_squad_v2)
-                    saver.save(step, model, results[args.metric_name], device)
+                    saver.save(step, model, optimizer, results[args.metric_name], device)
                     ema.resume(model)
 
                     # Log to console
