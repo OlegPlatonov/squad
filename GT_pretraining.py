@@ -171,6 +171,24 @@ def main(args):
                     for k, v in results.items():
                         tbx.add_scalar('dev/{}'.format(k), v, step)
 
+            if args.eval_after_epoch:
+                # Evaluate and save checkpoint
+                log.info('Saving checkpoint at step {}...'.format(step))
+                ema.assign(model)
+                results = evaluate(model, dev_loader, device)
+                saver.save(step, model, optimizer, results['Accuracy'], device)
+                ema.resume(model)
+
+                # Log to console
+                results_str = ', '.join('{}: {:05.2f}'.format(k, v)
+                                        for k, v in results.items())
+                log.info('Dev {}'.format(results_str))
+
+                # Log to TensorBoard
+                log.info('Visualizing in TensorBoard...')
+                for k, v in results.items():
+                    tbx.add_scalar('dev/{}'.format(k), v, step)
+
 
 def evaluate(model, data_loader, device):
     nll_meter = util.AverageMeter()

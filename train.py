@@ -172,6 +172,33 @@ def main(args):
                                    split='dev',
                                    num_visuals=args.num_visuals)
 
+            if args.eval_after_epoch:
+                # Evaluate and save checkpoint
+                log.info('Evaluating at step {}...'.format(step))
+                ema.assign(model)
+                results, pred_dict = evaluate(model, dev_loader, device,
+                                              args.dev_eval_file,
+                                              args.max_ans_len,
+                                              args.use_squad_v2)
+                saver.save(step, model, optimizer, results[args.metric_name], device)
+                ema.resume(model)
+
+                # Log to console
+                results_str = ', '.join('{}: {:05.2f}'.format(k, v)
+                                        for k, v in results.items())
+                log.info('Dev {}'.format(results_str))
+
+                # Log to TensorBoard
+                log.info('Visualizing in TensorBoard...')
+                for k, v in results.items():
+                    tbx.add_scalar('dev/{}'.format(k), v, step)
+                util.visualize(tbx,
+                               pred_dict=pred_dict,
+                               eval_path=args.dev_eval_file,
+                               step=step,
+                               split='dev',
+                               num_visuals=args.num_visuals)
+
 
 def evaluate(model, data_loader, device, eval_file, max_len, use_squad_v2):
     nll_meter = util.AverageMeter()

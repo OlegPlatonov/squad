@@ -138,6 +138,10 @@ def get_train_args():
                         type=float,
                         default=0.999,
                         help='Decay rate for exponential moving average of parameters.')
+    parser.add_argument('--eval_after_epoch',
+                        type=lambda s: s.lower().startswith('t'),
+                        default=False,
+                        help='Whether to evaluate model at the end of every epoch.')
 
     args = parser.parse_args()
 
