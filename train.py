@@ -103,6 +103,14 @@ def main(args):
 
     # Train
     log.info('Training...')
+
+    frozen = False
+    if args.freeze_steps is not None:
+        log.info(f'Freezing encoder for {args.freeze_steps} training steps...')
+        frozen = True
+        for param in model.module.encoder.parameters():
+            param.requires_grad = False
+
     steps_till_eval = args.eval_steps
     epoch = step // len(train_dataset)
     while epoch != args.num_epochs:
@@ -171,6 +179,12 @@ def main(args):
                                    step=step,
                                    split='dev',
                                    num_visuals=args.num_visuals)
+
+                if frozen and step >= args.freeze_steps:
+                    log.info('Unfreezing encoder...')
+                    frozen = False
+                    for param in model.module.encoder.parameters():
+                        param.requires_grad = True
 
             if args.eval_after_epoch:
                 # Evaluate and save checkpoint
