@@ -444,10 +444,30 @@ class GTOutputDoubleWindowPooling(nn.Module):
         return logits.squeeze()
 
 
+# class MLMNSPOutput(nn.Module):
+#     def __init__(self, hidden_size, hidden_size_2, vocab_size):
+#         super(MLMNSPOutput, self).__init__()
+#         self.mod_linear = nn.Linear(2 * hidden_size_2, vocab_size)
+#         self.mod_linear_start = nn.Linear(3 * 2 * hidden_size_2, 1)
+#         self.att_linear_start = nn.Linear(3 * 8 * hidden_size, 1)
+#
+#     def forward(self, c_att, c_mod, q_att, q_mod, mask_1, mask_2):
+#         start_mod = torch.cat((c_mod[:, 0], q_mod[:, 0], c_mod[:, 0] * q_mod[:, 0]), dim=-1)
+#         start_att = torch.cat((c_att[:, 0], q_att[:, 0], c_att[:, 0] * q_att[:, 0]), dim=-1)
+#         NSP_logits = self.mod_linear_start(start_mod) + self.att_linear_start(start_att)
+#
+#         MLM_mod_1 = c_mod[mask_1]
+#         MLM_mod_2 = q_mod[mask_2]
+#
+#         MLM_logits_1 = self.mod_linear(MLM_mod_1)
+#         MLM_logits_2 = self.mod_linear(MLM_mod_2)
+#
+#         return MLM_logits_1.squeeze(), MLM_logits_2.squeeze(), NSP_logits.squeeze()
+
 class MLMNSPOutput(nn.Module):
     def __init__(self, hidden_size, hidden_size_2, vocab_size):
         super(MLMNSPOutput, self).__init__()
-        self.mod_linear = nn.Linear(2 * hidden_size_2, vocab_size)
+        self.mod_linear = nn.Linear(2 * hidden_size_2, 300)
         self.mod_linear_start = nn.Linear(3 * 2 * hidden_size_2, 1)
         self.att_linear_start = nn.Linear(3 * 8 * hidden_size, 1)
 
@@ -456,10 +476,7 @@ class MLMNSPOutput(nn.Module):
         start_att = torch.cat((c_att[:, 0], q_att[:, 0], c_att[:, 0] * q_att[:, 0]), dim=-1)
         NSP_logits = self.mod_linear_start(start_mod) + self.att_linear_start(start_att)
 
-        MLM_mod_1 = c_mod[mask_1]
-        MLM_mod_2 = q_mod[mask_2]
+        MLM_mod_1 = self.mod_linear(c_mod[mask_1])
+        MLM_mod_2 = self.mod_linear(q_mod[mask_2])
 
-        MLM_logits_1 = self.mod_linear(MLM_mod_1)
-        MLM_logits_2 = self.mod_linear(MLM_mod_2)
-
-        return MLM_logits_1.squeeze(), MLM_logits_2.squeeze(), NSP_logits.squeeze()
+        return MLM_mod_1, MLM_mod_2, NSP_logits.squeeze()

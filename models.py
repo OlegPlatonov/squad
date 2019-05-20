@@ -202,6 +202,28 @@ class BiDAFGT(nn.Module):
         return out
 
 
+# class BiDAFMLMNSP(nn.Module):
+#     def __init__(self, word_vectors, char_vectors, hidden_size, hidden_size_2, drop_prob=0., use_chars=True):
+#         super(BiDAFMLMNSP, self).__init__()
+#         self.encoder = BiDAFEncoderMirrored(word_vectors=word_vectors,
+#                                             char_vectors=char_vectors,
+#                                             hidden_size=hidden_size,
+#                                             hidden_size_2=hidden_size_2,
+#                                             drop_prob=drop_prob,
+#                                             use_chars=use_chars)
+#
+#         self.output_layer = layers.MLMNSPOutput(hidden_size=hidden_size,
+#                                                 hidden_size_2=hidden_size_2,
+#                                                 vocab_size=word_vectors.shape[0])
+#
+#     def forward(self, cw_idxs, cc_idxs, qw_idxs, qc_idxs, mask_1, mask_2):
+#         c_att, c_mod, c_mask, q_att, q_mod, q_mask = self.encoder(cw_idxs, cc_idxs, qw_idxs, qc_idxs)
+#
+#         MLM_logits_1, MLM_logits_2, NSP_logits = self.output_layer(c_att, c_mod, q_att, q_mod, mask_1, mask_2)
+#
+#         return MLM_logits_1, MLM_logits_2, NSP_logits
+
+
 class BiDAFMLMNSP(nn.Module):
     def __init__(self, word_vectors, char_vectors, hidden_size, hidden_size_2, drop_prob=0., use_chars=True):
         super(BiDAFMLMNSP, self).__init__()
@@ -219,6 +241,9 @@ class BiDAFMLMNSP(nn.Module):
     def forward(self, cw_idxs, cc_idxs, qw_idxs, qc_idxs, mask_1, mask_2):
         c_att, c_mod, c_mask, q_att, q_mod, q_mask = self.encoder(cw_idxs, cc_idxs, qw_idxs, qc_idxs)
 
-        MLM_logits_1, MLM_logits_2, NSP_logits = self.output_layer(c_att, c_mod, q_att, q_mod, mask_1, mask_2)
+        MLM_mod_1, MLM_mod_2, NSP_logits = self.output_layer(c_att, c_mod, q_att, q_mod, mask_1, mask_2)
+
+        MLM_logits_1 = MLM_mod_1 @ torch.t(self.encoder.emb.embed_words.weight)
+        MLM_logits_2 = MLM_mod_2 @ torch.t(self.encoder.emb.embed_words.weight)
 
         return MLM_logits_1, MLM_logits_2, NSP_logits
