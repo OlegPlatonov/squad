@@ -117,6 +117,49 @@ class BiDAFEncoder(nn.Module):
         return att, mod, c_mask
 
 
+class BiDAFEncoderMirrored(nn.Module):
+    def __init__(self, word_vectors, char_vectors, hidden_size, hidden_size_2, drop_prob=0., use_chars=True):
+        super(BiDAFEncoderMirrored, self).__init__()
+        self.emb = layers.Embedding(word_vectors=word_vectors,
+                                    hidden_size=hidden_size,
+                                    drop_prob=drop_prob,
+                                    use_chars=use_chars,
+                                    char_vectors=char_vectors,
+                                    num_filters=100)
+
+        self.enc = layers.RNNEncoder(input_size=hidden_size,
+                                     hidden_size=hidden_size,
+                                     num_layers=1,
+                                     drop_prob=drop_prob)
+
+        self.att = layers.BiDAFAttentionMirrored(hidden_size=2 * hidden_size,
+                                                 drop_prob=drop_prob)
+
+        self.mod = layers.RNNEncoder(input_size=8 * hidden_size,
+                                     hidden_size=hidden_size_2,
+                                     num_layers=1,
+                                     drop_prob=drop_prob)
+
+    def forward(self, cw_idxs, cc_idxs, qw_idxs, qc_idxs):
+        c_mask = torch.zeros_like(cw_idxs) != cw_idxs
+        q_mask = torch.zeros_like(qw_idxs) != qw_idxs
+        c_len, q_len = c_mask.sum(-1), q_mask.sum(-1)
+
+        c_emb = self.emb(cw_idxs, cc_idxs)  # (batch_size, c_len, hidden_size)
+        q_emb = self.emb(qw_idxs, qc_idxs)  # (batch_size, q_len, hidden_size)
+
+        c_enc = self.enc(c_emb, c_len)  # (batch_size, c_len, 2 * hidden_size)
+        q_enc = self.enc(q_emb, q_len)  # (batch_size, q_len, 2 * hidden_size)
+
+        c_att, q_att = self.att(c_enc, q_enc,
+                                c_mask, q_mask)  # (batch_size, c_len, 8 * hidden_size)
+
+        c_mod = self.mod(c_att, c_len)  # (batch_size, c_len, 2 * hidden_size)
+        q_mod = self.mod(q_att, q_len)  # (batch_size, c_len, 2 * hidden_size)
+
+        return c_att, c_mod, c_mask, q_att, q_mod, q_mask
+
+
 class BiDAFSQuAD(nn.Module):
     def __init__(self, word_vectors, char_vectors, hidden_size, hidden_size_2, drop_prob=0., use_chars=True):
         super(BiDAFSQuAD, self).__init__()
@@ -157,3 +200,25 @@ class BiDAFGT(nn.Module):
         out = self.output_layer(att, mod, gap_indices, c_mask)
 
         return out
+
+
+class BiDAFMLMNSP(nn.Module):
+    def __init__(self, word_vectors, char_vectors, hidden_size, hidden_size_2, drop_prob=0., use_chars=True):
+        super(BiDAFMLMNSP, self).__init__()
+        self.encoder = BiDAFEncoderMirrored(word_vectors=word_vectors,
+                                            char_vectors=char_vectors,
+                                            hidden_size=hidden_size,
+                                            hidden_size_2=hidden_size_2,
+                                            drop_prob=drop_prob,
+                                            use_chars=use_chars)
+
+        self.output_layer = layers.MLMNSPOutput(hidden_size=hidden_size,
+                                                hidden_size_2=hidden_size_2,
+                                                vocab_size=word_vectors.shape[0])
+
+    def forward(self, cw_idxs, cc_idxs, qw_idxs, qc_idxs, mask_1, mask_2):
+        c_att, c_mod, c_mask, q_att, q_mod, q_mask = self.encoder(cw_idxs, cc_idxs, qw_idxs, qc_idxs)
+
+        MLM_logits_1, MLM_logits_2, NSP_logits = self.output_layer(c_att, c_mod, q_att, q_mod, mask_1, mask_2)
+
+        return MLM_logits_1, MLM_logits_2, NSP_logits

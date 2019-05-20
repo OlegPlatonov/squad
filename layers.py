@@ -210,6 +210,56 @@ class BiDAFAttention(nn.Module):
         return s
 
 
+class BiDAFAttentionMirrored(nn.Module):
+    def __init__(self, hidden_size, drop_prob=0.1):
+        super(BiDAFAttentionMirrored, self).__init__()
+        self.drop_prob = drop_prob
+        self.c_weight = nn.Parameter(torch.zeros(hidden_size, 1))
+        self.q_weight = nn.Parameter(torch.zeros(hidden_size, 1))
+        self.cq_weight = nn.Parameter(torch.zeros(1, 1, hidden_size))
+        for weight in (self.c_weight, self.q_weight, self.cq_weight):
+            nn.init.xavier_uniform_(weight)
+        self.bias = nn.Parameter(torch.zeros(1))
+
+    def forward(self, c, q, c_mask, q_mask):
+        batch_size, c_len, _ = c.size()
+        q_len = q.size(1)
+        s = self.get_similarity_matrix(c, q)        # (batch_size, c_len, q_len)
+        c_mask = c_mask.view(batch_size, c_len, 1)  # (batch_size, c_len, 1)
+        q_mask = q_mask.view(batch_size, 1, q_len)  # (batch_size, 1, q_len)
+        s1 = masked_softmax(s, q_mask, dim=2)       # (batch_size, c_len, q_len)
+        s2 = masked_softmax(s, c_mask, dim=1)       # (batch_size, c_len, q_len)
+
+        # (bs, c_len, q_len) x (bs, q_len, hid_size) => (bs, c_len, hid_size)
+        a_c = torch.bmm(s1, q)
+        # (bs, c_len, c_len) x (bs, c_len, hid_size) => (bs, c_len, hid_size)
+        b_c = torch.bmm(torch.bmm(s1, s2.transpose(1, 2)), c)
+
+        x_c = torch.cat([c, a_c, c * a_c, c * b_c], dim=2)  # (bs, c_len, 4 * hid_size)
+
+        a_q = torch.bmm(s2.transpose(1, 2), c)
+
+        b_q = torch.bmm(torch.bmm(s2.transpose(1, 2), s1), q)
+
+        x_q = torch.cat([q, a_q, q * a_q, q * b_q], dim=2)
+
+        return x_c, x_q
+
+    def get_similarity_matrix(self, c, q):
+        c_len, q_len = c.size(1), q.size(1)
+        c = F.dropout(c, self.drop_prob, self.training)  # (bs, c_len, hid_size)
+        q = F.dropout(q, self.drop_prob, self.training)  # (bs, q_len, hid_size)
+
+        # Shapes: (batch_size, c_len, q_len)
+        s0 = torch.matmul(c, self.c_weight).expand([-1, -1, q_len])
+        s1 = torch.matmul(q, self.q_weight).transpose(1, 2)\
+                                           .expand([-1, c_len, -1])
+        s2 = torch.matmul(c * self.cq_weight, q.transpose(1, 2))
+        s = s0 + s1 + s2 + self.bias
+
+        return s
+
+
 class SQuADOutput(nn.Module):
     """Output layer used by BiDAF for question answering.
 
@@ -392,3 +442,24 @@ class GTOutputDoubleWindowPooling(nn.Module):
         logits = torch.cat((logits_start, logits), dim=1)
 
         return logits.squeeze()
+
+
+class MLMNSPOutput(nn.Module):
+    def __init__(self, hidden_size, hidden_size_2, vocab_size):
+        super(MLMNSPOutput, self).__init__()
+        self.mod_linear = nn.Linear(2 * hidden_size_2, vocab_size)
+        self.mod_linear_start = nn.Linear(3 * 2 * hidden_size_2, 1)
+        self.att_linear_start = nn.Linear(3 * 8 * hidden_size, 1)
+
+    def forward(self, c_att, c_mod, q_att, q_mod, mask_1, mask_2):
+        start_mod = torch.cat((c_mod[:, 0], q_mod[:, 0], c_mod[:, 0] * q_mod[:, 0]), dim=-1)
+        start_att = torch.cat((c_att[:, 0], q_att[:, 0], c_att[:, 0] * q_att[:, 0]), dim=-1)
+        NSP_logits = self.mod_linear_start(start_mod) + self.att_linear_start(start_att)
+
+        MLM_mod_1 = c_mod[mask_1]
+        MLM_mod_2 = q_mod[mask_2]
+
+        MLM_logits_1 = self.mod_linear(MLM_mod_1)
+        MLM_logits_2 = self.mod_linear(MLM_mod_2)
+
+        return MLM_logits_1.squeeze(), MLM_logits_2.squeeze(), NSP_logits.squeeze()

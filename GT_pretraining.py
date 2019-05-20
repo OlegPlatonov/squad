@@ -106,7 +106,7 @@ def main(args):
     dev_loader = data.DataLoader(dev_dataset,
                                  batch_size=args.batch_size,
                                  shuffle=False,
-                                 num_workers=args.num_workers,
+                                 num_workers=4,
                                  collate_fn=gapped_text_collate_fn)
 
     # Train

@@ -146,6 +146,10 @@ def get_train_args():
                         type=int,
                         default=None,
                         help='Number of steps before unfreezing encoder. If None, encoder will be trainable from the start.')
+    parser.add_argument('--NSP_weight',
+                        type=float,
+                        default=3.0,
+                        help='Weight of NSP loss.')
 
     args = parser.parse_args()
 
