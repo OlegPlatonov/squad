@@ -98,7 +98,7 @@ def main(args):
     dev_loader = data.DataLoader(dev_dataset,
                                  batch_size=args.batch_size,
                                  shuffle=False,
-                                 num_workers=args.num_workers,
+                                 num_workers=4,
                                  collate_fn=collate_fn)
 
     # Train
@@ -181,7 +181,7 @@ def main(args):
                                    num_visuals=args.num_visuals)
 
                 if frozen and step >= args.freeze_steps:
-                    log.info('Unfreezing encoder...')
+                    log.info(f'Unfreezing encoder after step {step}...')
                     frozen = False
                     for param in model.module.encoder.parameters():
                         param.requires_grad = True

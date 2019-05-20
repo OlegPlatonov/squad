@@ -115,6 +115,30 @@ class GappedText(data.Dataset):
         return len(self.gap_indices)
 
 
+class MLM_NSP(data.Dataset):
+    def __init__(self, data_path):
+        super(MLM_NSP, self).__init__()
+
+        dataset = np.load(data_path)
+        self.texts_1_words = torch.from_numpy(dataset['texts_1_words']).long()
+        self.texts_1_chars = torch.from_numpy(dataset['texts_1_chars']).long()
+        self.texts_2_words = torch.from_numpy(dataset['texts_2_words']).long()
+        self.texts_2_chars = torch.from_numpy(dataset['texts_2_chars']).long()
+        self.is_next = torch.from_numpy(dataset['is_next']).long()
+
+    def __getitem__(self, idx):
+        example = (self.texts_1_words[idx],
+                   self.texts_1_chars[idx],
+                   self.texts_2_words[idx],
+                   self.texts_2_chars[idx],
+                   self.is_next[idx])
+
+        return example
+
+    def __len__(self):
+        return len(self.is_next)
+
+
 def collate_fn(examples):
     """Create batch tensors from a list of individual examples returned
     by `SQuAD.__getitem__`. Merge examples of different length by padding
@@ -221,6 +245,82 @@ def gapped_text_collate_fn(examples):
     correct_gaps = merge_0d(correct_gaps)
 
     return texts_words, texts_chars, gap_indices, fragments_words, fragments_chars, correct_gaps
+
+
+def MLM_NSP_collate_fn(examples, mask_prob=0.12, mask_id=4, use_pseudomasking=True, vocab_size=50000):
+    def merge_0d(scalars, dtype=torch.int64):
+        return torch.tensor(scalars, dtype=dtype)
+
+    def merge_1d(arrays, dtype=torch.int64, pad_value=0):
+        lengths = [(a != pad_value).sum() for a in arrays]
+        padded = torch.zeros(len(arrays), max(lengths), dtype=dtype)
+        for i, seq in enumerate(arrays):
+            end = lengths[i]
+            padded[i, :end] = seq[:end]
+        return padded
+
+    def merge_2d(matrices, dtype=torch.int64, pad_value=0):
+        heights = [(m.sum(1) != pad_value).sum() for m in matrices]
+        widths = [(m.sum(0) != pad_value).sum() for m in matrices]
+        padded = torch.zeros(len(matrices), max(heights), max(widths), dtype=dtype)
+        for i, seq in enumerate(matrices):
+            height, width = heights[i], widths[i]
+            padded[i, :height, :width] = seq[:height, :width]
+        return padded
+
+    texts_1_words, texts_1_chars, texts_2_words, texts_2_chars, is_next = zip(*examples)
+
+    texts_1_words = merge_1d(texts_1_words)
+    texts_1_chars = merge_2d(texts_1_chars)
+    texts_2_words = merge_1d(texts_2_words)
+    texts_2_chars = merge_2d(texts_2_chars)
+    is_next = merge_0d(is_next)
+
+    mask_1 = np.random.binomial(n=1, p=mask_prob, size=texts_1_words.shape)
+    texts_1_words_np = texts_1_words.numpy()
+    mask_1 = mask_1 & (texts_1_words_np != 0) & (texts_1_words_np != 1) & (texts_1_words_np != 2) & (texts_1_words_np != 3)
+    mask_1 = tuple(map(torch.from_numpy, np.where(mask_1)))
+    masked_words_1 = texts_1_words[mask_1]
+    texts_1_words[mask_1] = mask_id
+    char_mask = torch.zeros_like(texts_1_chars[0, 0])
+    char_mask[0] = mask_id
+    texts_1_chars[mask_1] = char_mask
+
+    mask_2 = np.random.binomial(n=1, p=mask_prob, size=texts_2_words.shape)
+    texts_2_words_np = texts_2_words.numpy()
+    mask_2 = mask_2 & (texts_2_words_np != 0) & (texts_2_words_np != 1) & (texts_2_words_np != 2) & (texts_2_words_np != 3)
+    mask_2 = tuple(map(torch.from_numpy, np.where(mask_2)))
+    masked_words_2 = texts_2_words[mask_2]
+    texts_2_words[mask_2] = mask_id
+    char_mask = torch.zeros_like(texts_2_chars[0, 0])
+    char_mask[0] = mask_id
+    texts_2_chars[mask_2] = char_mask
+
+    if use_pseudomasking:
+        x = np.random.choice(3, size=masked_words_1.shape, p=(0.8, 0.1, 0.1))
+        idx_1 = np.where(x == 1)[0]
+        idx_2 = np.where(x == 2)[0]
+        replace_with_original = (mask_1[0][idx_1], mask_1[1][idx_1])
+        replace_with_random = (mask_1[0][idx_2], mask_1[1][idx_2])
+        texts_1_words[replace_with_original] = masked_words_1[idx_1]
+        texts_1_words[replace_with_random] = torch.from_numpy(np.random.choice(np.arange(14, vocab_size), size=idx_2.shape)).long()
+        empty_chars = torch.zeros_like(texts_1_chars[0, 0])
+        texts_1_chars[replace_with_original] = empty_chars
+        texts_1_chars[replace_with_random] = empty_chars
+
+        x = np.random.choice(3, size=masked_words_2.shape, p=(0.8, 0.1, 0.1))
+        idx_1 = np.where(x == 1)[0]
+        idx_2 = np.where(x == 2)[0]
+        replace_with_original = (mask_2[0][idx_1], mask_2[1][idx_1])
+        replace_with_random = (mask_2[0][idx_2], mask_2[1][idx_2])
+        texts_2_words[replace_with_original] = masked_words_2[idx_1]
+        texts_2_words[replace_with_random] = torch.from_numpy(np.random.choice(np.arange(14, vocab_size), size=idx_2.shape)).long()
+        empty_chars = torch.zeros_like(texts_2_chars[0, 0])
+        texts_2_chars[replace_with_original] = empty_chars
+        texts_2_chars[replace_with_random] = empty_chars
+
+    return (texts_1_words, texts_1_chars, texts_2_words, texts_2_chars, is_next,
+            mask_1, masked_words_1, mask_2, masked_words_2)
 
 
 class AverageMeter:
