@@ -84,7 +84,7 @@ def main(args):
     # Get data loader
     data_folder = './data/MLM_NSP/Tokenized'
     data_files = [os.path.join(data_folder, file) for file in os.listdir(data_folder)]
-    log.info('Data files found:')
+    log.info('Training data files found:')
     for file in data_files:
         log.info(file)
 
@@ -115,7 +115,7 @@ def main(args):
             while datasets_start < len(data_files):
                 log.info('Building dataset...')
                 datasets = []
-                for file in data_files[datasets_start:datasets_start + 5]:
+                for file in data_files[datasets_start:datasets_start + 4]:
                     log.info(f'Creating dataset from {file}...')
                     datasets.append(MLM_NSP(file))
                 log.info('Concatenating datasets...')
@@ -197,7 +197,7 @@ def main(args):
                         for k, v in results.items():
                             tbx.add_scalar('dev/{}'.format(k), v, step)
 
-                datasets_start += 5
+                datasets_start += 4
                 del datasets
 
             if args.eval_after_epoch:
