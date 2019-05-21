@@ -83,22 +83,9 @@ def main(args):
     # Get data loader
     data_folder = './data/Gapped_Text/Tokenized'
     data_files = [os.path.join(data_folder, file) for file in os.listdir(data_folder)]
-    log.info('Data files found:')
+    log.info('Training data files found:')
     for file in data_files:
         log.info(file)
-    datasets = []
-    log.info('Building dataset...')
-    for file in data_files:
-        log.info(f'Creating dataset from {file}...')
-        datasets.append(GappedText(file))
-    log.info('Concatenating datasets...')
-    train_dataset = data.ConcatDataset(datasets)
-
-    train_loader = data.DataLoader(train_dataset,
-                                   batch_size=args.batch_size,
-                                   shuffle=True,
-                                   num_workers=args.num_workers,
-                                   collate_fn=gapped_text_collate_fn)
 
     log.info('Creating dev dataset...')
     dev_file = './data/Gapped_Text/Tokenized_dev/Dataset_dev.npz'
@@ -111,66 +98,87 @@ def main(args):
 
     # Train
     log.info('Training...')
+    train_dataset_size = 2779163
     steps_till_eval = args.eval_steps
-    epoch = step // len(train_dataset)
+    epoch = step // train_dataset_size
     while epoch != args.num_epochs:
         epoch += 1
         log.info('Starting epoch {}...'.format(epoch))
         with torch.enable_grad(), \
-                tqdm(total=len(train_loader.dataset)) as progress_bar:
-            for cw_idxs, cc_idxs, gap_indices, qw_idxs, qc_idxs, correct_gaps in train_loader:
-                # Setup for forward
-                cw_idxs = cw_idxs.to(device)
-                cc_idxs = cc_idxs.to(device)
-                qw_idxs = qw_idxs.to(device)
-                qc_idxs = qc_idxs.to(device)
-                gap_indices = gap_indices.to(device)
-                correct_gaps = correct_gaps.to(device)
-                batch_size = int(cw_idxs.size(0) / 6)
-                optimizer.zero_grad()
+                tqdm(total=train_dataset_size) as progress_bar:
 
-                # Forward
-                logits = model(cw_idxs, cc_idxs, qw_idxs, qc_idxs, gap_indices)
-                loss = F.cross_entropy(input=logits, target=correct_gaps)
-                loss_val = loss.item()
+            random.shuffle(data_files)
+            datasets_start = 0
+            while datasets_start < len(data_files):
+                log.info('Building dataset...')
+                datasets = []
+                for file in data_files[datasets_start:datasets_start + 3]:
+                    log.info(f'Creating dataset from {file}...')
+                    datasets.append(GappedText(file))
+                log.info('Concatenating datasets...')
+                train_dataset = data.ConcatDataset(datasets)
+                train_loader = data.DataLoader(train_dataset,
+                                               batch_size=args.batch_size,
+                                               shuffle=True,
+                                               num_workers=args.num_workers,
+                                               collate_fn=gapped_text_collate_fn)
 
-                # Backward
-                loss.backward()
-                nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
-                optimizer.step()
-                scheduler.step(step // batch_size)
-                ema(model, step // batch_size)
+                for cw_idxs, cc_idxs, gap_indices, qw_idxs, qc_idxs, correct_gaps in train_loader:
+                    # Setup for forward
+                    cw_idxs = cw_idxs.to(device)
+                    cc_idxs = cc_idxs.to(device)
+                    qw_idxs = qw_idxs.to(device)
+                    qc_idxs = qc_idxs.to(device)
+                    gap_indices = gap_indices.to(device)
+                    correct_gaps = correct_gaps.to(device)
+                    batch_size = int(cw_idxs.size(0) / 6)
+                    optimizer.zero_grad()
 
-                # Log info
-                step += batch_size
-                progress_bar.update(batch_size)
-                progress_bar.set_postfix(epoch=epoch,
-                                         NLL=loss_val)
-                tbx.add_scalar('train/NLL', loss_val, step)
-                tbx.add_scalar('train/LR',
-                               optimizer.param_groups[0]['lr'],
-                               step)
+                    # Forward
+                    logits = model(cw_idxs, cc_idxs, qw_idxs, qc_idxs, gap_indices)
+                    loss = F.cross_entropy(input=logits, target=correct_gaps)
+                    loss_val = loss.item()
 
-                steps_till_eval -= batch_size
-                if steps_till_eval <= 0:
-                    steps_till_eval = args.eval_steps
+                    # Backward
+                    loss.backward()
+                    nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
+                    optimizer.step()
+                    scheduler.step(step // batch_size)
+                    ema(model, step // batch_size)
 
-                    # Evaluate and save checkpoint
-                    log.info('Saving checkpoint at step {}...'.format(step))
-                    ema.assign(model)
-                    results = evaluate(model, dev_loader, device)
-                    saver.save(step, model, optimizer, results['Accuracy'], device)
-                    ema.resume(model)
+                    # Log info
+                    step += batch_size
+                    progress_bar.update(batch_size)
+                    progress_bar.set_postfix(epoch=epoch,
+                                             NLL=loss_val)
+                    tbx.add_scalar('train/NLL', loss_val, step)
+                    tbx.add_scalar('train/LR',
+                                   optimizer.param_groups[0]['lr'],
+                                   step)
 
-                    # Log to console
-                    results_str = ', '.join('{}: {:05.2f}'.format(k, v)
-                                            for k, v in results.items())
-                    log.info('Dev {}'.format(results_str))
+                    steps_till_eval -= batch_size
+                    if steps_till_eval <= 0:
+                        steps_till_eval = args.eval_steps
 
-                    # Log to TensorBoard
-                    log.info('Visualizing in TensorBoard...')
-                    for k, v in results.items():
-                        tbx.add_scalar('dev/{}'.format(k), v, step)
+                        # Evaluate and save checkpoint
+                        log.info('Saving checkpoint at step {}...'.format(step))
+                        ema.assign(model)
+                        results = evaluate(model, dev_loader, device)
+                        saver.save(step, model, optimizer, results['Accuracy'], device)
+                        ema.resume(model)
+
+                        # Log to console
+                        results_str = ', '.join('{}: {:05.2f}'.format(k, v)
+                                                for k, v in results.items())
+                        log.info('Dev {}'.format(results_str))
+
+                        # Log to TensorBoard
+                        log.info('Visualizing in TensorBoard...')
+                        for k, v in results.items():
+                            tbx.add_scalar('dev/{}'.format(k), v, step)
+
+                datasets_start += 3
+                del datasets
 
             if args.eval_after_epoch:
                 # Evaluate and save checkpoint
