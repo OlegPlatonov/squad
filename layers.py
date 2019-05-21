@@ -351,7 +351,7 @@ class GTOutputWindowPooling(nn.Module):
 
             else:
                 indices = torch.arange(seq_len).view(1, -1).to(device)
-                window_mask = (indices >= (gap_id - 12)) * (indices <= (gap_id + 12)) * mask
+                window_mask = (indices >= (gap_id - 15)) * (indices <= (gap_id + 15)) * mask
                 mod_window = mod * window_mask.unsqueeze(2).type(torch.float32)
                 max_pool_mod, _ = torch.max(mod_window, dim=1, keepdim=True)
                 avg_pool_mod = torch.sum(mod_window, dim=1, keepdim=True) / torch.unsqueeze(torch.sum(window_mask, dim=1, keepdim=True), dim=2).type(torch.float32)
@@ -401,14 +401,14 @@ class GTOutputDoubleWindowPooling(nn.Module):
                 avg_pool_att_1 = torch.sum(att[:, 1:], dim=1, keepdim=True) / torch.unsqueeze(torch.sum(mask, dim=1, keepdim=True) - 1, dim=2).type(torch.float32)
 
                 max_pool_mod_2, _ = torch.max(mod_gaps[:, 1:], dim=1, keepdim=True)
-                avg_pool_mod_2 = torch.sum(mod_gaps[:, 1:], dim=1, keepdim=True) / 4
+                avg_pool_mod_2 = torch.sum(mod_gaps[:, 1:], dim=1, keepdim=True) / 5
                 max_pool_att_2, _ = torch.max(att_gaps[:, 1:], dim=1, keepdim=True)
-                avg_pool_att_2 = torch.sum(att_gaps[:, 1:], dim=1, keepdim=True) / 4
+                avg_pool_att_2 = torch.sum(att_gaps[:, 1:], dim=1, keepdim=True) / 5
 
             else:
                 indices = torch.arange(seq_len).view(1, -1).to(device)
-                window_mask_1 = (indices >= (gap_id - 12)) * (indices < gap_id) * mask
-                window_mask_2 = (indices > gap_id) * (indices <= (gap_id + 12)) * mask
+                window_mask_1 = (indices >= (gap_id - 15)) * (indices < gap_id) * mask
+                window_mask_2 = (indices > gap_id) * (indices <= (gap_id + 15)) * mask
 
                 mod_window_1 = mod * window_mask_1.unsqueeze(2).type(torch.float32)
                 max_pool_mod_1, _ = torch.max(mod_window_1, dim=1, keepdim=True)
