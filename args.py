@@ -150,6 +150,10 @@ def get_train_args():
                         type=float,
                         default=3.0,
                         help='Weight of NSP loss.')
+    parser.add_argument('--num_fragments',
+                        type=int,
+                        default=8,
+                        help='Number of fragments per text for GT pre-training.')
 
     args = parser.parse_args()
 

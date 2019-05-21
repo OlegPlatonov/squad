@@ -131,7 +131,7 @@ def main(args):
                     qc_idxs = qc_idxs.to(device)
                     gap_indices = gap_indices.to(device)
                     correct_gaps = correct_gaps.to(device)
-                    batch_size = int(cw_idxs.size(0) / 6)
+                    batch_size = int(cw_idxs.size(0) / args.num_fragments)
                     optimizer.zero_grad()
 
                     # Forward
@@ -163,7 +163,7 @@ def main(args):
                         # Evaluate and save checkpoint
                         log.info('Saving checkpoint at step {}...'.format(step))
                         ema.assign(model)
-                        results = evaluate(model, dev_loader, device)
+                        results = evaluate(model, dev_loader, device, args)
                         saver.save(step, model, optimizer, results['Accuracy'], device)
                         ema.resume(model)
 
@@ -184,7 +184,7 @@ def main(args):
                 # Evaluate and save checkpoint
                 log.info('Saving checkpoint at step {}...'.format(step))
                 ema.assign(model)
-                results = evaluate(model, dev_loader, device)
+                results = evaluate(model, dev_loader, device, args)
                 saver.save(step, model, optimizer, results['Accuracy'], device)
                 ema.resume(model)
 
@@ -199,7 +199,7 @@ def main(args):
                     tbx.add_scalar('dev/{}'.format(k), v, step)
 
 
-def evaluate(model, data_loader, device):
+def evaluate(model, data_loader, device, args):
     nll_meter = util.AverageMeter()
 
     model.eval()
@@ -217,7 +217,7 @@ def evaluate(model, data_loader, device):
             qc_idxs = qc_idxs.to(device)
             gap_indices = gap_indices.to(device)
             correct_gaps = correct_gaps.to(device)
-            batch_size = int(cw_idxs.size(0) / 6)
+            batch_size = int(cw_idxs.size(0) / args.num_fragments)
 
             # Forward
             logits = model(cw_idxs, cc_idxs, qw_idxs, qc_idxs, gap_indices)
