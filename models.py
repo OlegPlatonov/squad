@@ -216,9 +216,9 @@ class BiDAFMLMNSP(nn.Module):
                                                 hidden_size_2=hidden_size_2,
                                                 vocab_size=word_vectors.shape[0])
 
-    def forward(self, cw_idxs, cc_idxs, qw_idxs, qc_idxs, mask_1, mask_2):
+    def forward(self, cw_idxs, cc_idxs, qw_idxs, qc_idxs, mask_1, mask_2, texts_1_words_unmasked, texts_2_words_unmasked):
         c_att, c_mod, c_mask, q_att, q_mod, q_mask = self.encoder(cw_idxs, cc_idxs, qw_idxs, qc_idxs)
 
-        MLM_logits_1, MLM_logits_2, NSP_logits = self.output_layer(c_att, c_mod, q_att, q_mod, mask_1, mask_2)
+        MLM_logits, masked_words, NSP_logits = self.output_layer(c_att, c_mod, q_att, q_mod, mask_1, mask_2, texts_1_words_unmasked, texts_2_words_unmasked)
 
-        return MLM_logits_1, MLM_logits_2, NSP_logits
+        return MLM_logits, masked_words, NSP_logits

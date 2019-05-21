@@ -128,24 +128,23 @@ def main(args):
                                                                   use_pseudomasking=True,
                                                                   vocab_size=word_vectors.shape[0]))
 
-                for cw_idxs, cc_idxs, qw_idxs, qc_idxs, is_next, mask_1, masked_words_1, mask_2, masked_words_2 in train_loader:
+                for cw_idxs, cc_idxs, qw_idxs, qc_idxs, is_next, mask_1, texts_1_words_unmasked, mask_2, texts_2_words_unmasked in train_loader:
                     # Setup for forward
                     cw_idxs = cw_idxs.to(device)
                     cc_idxs = cc_idxs.to(device)
                     qw_idxs = qw_idxs.to(device)
                     qc_idxs = qc_idxs.to(device)
                     is_next = is_next.to(device)
-                    mask_1 = tuple(x.to(device) for x in mask_1)
-                    mask_2 = tuple(x.to(device) for x in mask_2)
-                    masked_words_1 = masked_words_1.to(device)
-                    masked_words_2 = masked_words_2.to(device)
+                    mask_1 = mask_1.to(device)
+                    mask_2 = mask_2.to(device)
+                    texts_1_words_unmasked = texts_1_words_unmasked.to(device)
+                    texts_2_words_unmasked = texts_2_words_unmasked.to(device)
                     batch_size = cw_idxs.size(0)
                     optimizer.zero_grad()
 
                     # Forward
-                    MLM_logits_1, MLM_logits_2, NSP_logits = model(cw_idxs, cc_idxs, qw_idxs, qc_idxs, mask_1, mask_2)
-                    MLM_logits = torch.cat((MLM_logits_1, MLM_logits_2), dim=0)
-                    masked_words = torch.cat((masked_words_1, masked_words_2), dim=0)
+                    MLM_logits, masked_words, NSP_logits = model(cw_idxs, cc_idxs, qw_idxs, qc_idxs, mask_1, mask_2,
+                                                                 texts_1_words_unmasked, texts_2_words_unmasked)
 
                     MLM_loss = F.cross_entropy(input=MLM_logits, target=masked_words)
                     NSP_loss = args.NSP_weight * F.binary_cross_entropy_with_logits(input=NSP_logits, target=is_next.float())
@@ -231,23 +230,22 @@ def evaluate(model, data_loader, device, args):
     total_preds_NSP = 0
     with torch.no_grad(), \
             tqdm(total=len(data_loader.dataset)) as progress_bar:
-        for cw_idxs, cc_idxs, qw_idxs, qc_idxs, is_next, mask_1, masked_words_1, mask_2, masked_words_2 in data_loader:
+        for cw_idxs, cc_idxs, qw_idxs, qc_idxs, is_next, mask_1, texts_1_words_unmasked, mask_2, texts_2_words_unmasked in data_loader:
             # Setup for forward
             cw_idxs = cw_idxs.to(device)
             cc_idxs = cc_idxs.to(device)
             qw_idxs = qw_idxs.to(device)
             qc_idxs = qc_idxs.to(device)
             is_next = is_next.to(device)
-            mask_1 = tuple(x.to(device) for x in mask_1)
-            mask_2 = tuple(x.to(device) for x in mask_2)
-            masked_words_1 = masked_words_1.to(device)
-            masked_words_2 = masked_words_2.to(device)
+            mask_1 = mask_1.to(device)
+            mask_2 = mask_2.to(device)
+            texts_1_words_unmasked = texts_1_words_unmasked.to(device)
+            texts_2_words_unmasked = texts_2_words_unmasked.to(device)
             batch_size = cw_idxs.size(0)
 
             # Forward
-            MLM_logits_1, MLM_logits_2, NSP_logits = model(cw_idxs, cc_idxs, qw_idxs, qc_idxs, mask_1, mask_2)
-            MLM_logits = torch.cat((MLM_logits_1, MLM_logits_2), dim=0)
-            masked_words = torch.cat((masked_words_1, masked_words_2), dim=0)
+            MLM_logits, masked_words, NSP_logits = model(cw_idxs, cc_idxs, qw_idxs, qc_idxs, mask_1, mask_2,
+                                                         texts_1_words_unmasked, texts_2_words_unmasked)
 
             MLM_loss = F.cross_entropy(input=MLM_logits, target=masked_words)
             NSP_loss = args.NSP_weight * F.binary_cross_entropy_with_logits(input=NSP_logits, target=is_next.float())

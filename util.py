@@ -279,8 +279,10 @@ def MLM_NSP_collate_fn(examples, mask_prob=0.12, mask_id=4, use_pseudomasking=Tr
     mask_1 = np.random.binomial(n=1, p=mask_prob, size=texts_1_words.shape)
     texts_1_words_np = texts_1_words.numpy()
     mask_1 = mask_1 & (texts_1_words_np != 0) & (texts_1_words_np != 1) & (texts_1_words_np != 2) & (texts_1_words_np != 3)
-    mask_1 = tuple(map(torch.from_numpy, np.where(mask_1)))
+    mask_1 = torch.from_numpy(mask_1.astype(int)).byte()
+    mask_idx_1 = tuple(map(torch.from_numpy, np.where(mask_1)))
     masked_words_1 = texts_1_words[mask_1]
+    texts_1_words_unmasked = torch.empty_like(texts_1_words).copy_(texts_1_words)
     texts_1_words[mask_1] = mask_id
     char_mask = torch.zeros_like(texts_1_chars[0, 0])
     char_mask[0] = mask_id
@@ -289,8 +291,10 @@ def MLM_NSP_collate_fn(examples, mask_prob=0.12, mask_id=4, use_pseudomasking=Tr
     mask_2 = np.random.binomial(n=1, p=mask_prob, size=texts_2_words.shape)
     texts_2_words_np = texts_2_words.numpy()
     mask_2 = mask_2 & (texts_2_words_np != 0) & (texts_2_words_np != 1) & (texts_2_words_np != 2) & (texts_2_words_np != 3)
-    mask_2 = tuple(map(torch.from_numpy, np.where(mask_2)))
+    mask_2 = torch.from_numpy(mask_2.astype(int)).byte()
+    mask_idx_2 = tuple(map(torch.from_numpy, np.where(mask_2)))
     masked_words_2 = texts_2_words[mask_2]
+    texts_2_words_unmasked = torch.empty_like(texts_2_words).copy_(texts_2_words)
     texts_2_words[mask_2] = mask_id
     char_mask = torch.zeros_like(texts_2_chars[0, 0])
     char_mask[0] = mask_id
@@ -300,8 +304,8 @@ def MLM_NSP_collate_fn(examples, mask_prob=0.12, mask_id=4, use_pseudomasking=Tr
         x = np.random.choice(3, size=masked_words_1.shape, p=(0.8, 0.1, 0.1))
         idx_1 = np.where(x == 1)[0]
         idx_2 = np.where(x == 2)[0]
-        replace_with_original = (mask_1[0][idx_1], mask_1[1][idx_1])
-        replace_with_random = (mask_1[0][idx_2], mask_1[1][idx_2])
+        replace_with_original = (mask_idx_1[0][idx_1], mask_idx_1[1][idx_1])
+        replace_with_random = (mask_idx_1[0][idx_2], mask_idx_1[1][idx_2])
         texts_1_words[replace_with_original] = masked_words_1[idx_1]
         texts_1_words[replace_with_random] = torch.from_numpy(np.random.choice(np.arange(14, vocab_size), size=idx_2.shape)).long()
         empty_chars = torch.zeros_like(texts_1_chars[0, 0])
@@ -311,8 +315,8 @@ def MLM_NSP_collate_fn(examples, mask_prob=0.12, mask_id=4, use_pseudomasking=Tr
         x = np.random.choice(3, size=masked_words_2.shape, p=(0.8, 0.1, 0.1))
         idx_1 = np.where(x == 1)[0]
         idx_2 = np.where(x == 2)[0]
-        replace_with_original = (mask_2[0][idx_1], mask_2[1][idx_1])
-        replace_with_random = (mask_2[0][idx_2], mask_2[1][idx_2])
+        replace_with_original = (mask_idx_2[0][idx_1], mask_idx_2[1][idx_1])
+        replace_with_random = (mask_idx_2[0][idx_2], mask_idx_2[1][idx_2])
         texts_2_words[replace_with_original] = masked_words_2[idx_1]
         texts_2_words[replace_with_random] = torch.from_numpy(np.random.choice(np.arange(14, vocab_size), size=idx_2.shape)).long()
         empty_chars = torch.zeros_like(texts_2_chars[0, 0])
@@ -320,7 +324,7 @@ def MLM_NSP_collate_fn(examples, mask_prob=0.12, mask_id=4, use_pseudomasking=Tr
         texts_2_chars[replace_with_random] = empty_chars
 
     return (texts_1_words, texts_1_chars, texts_2_words, texts_2_chars, is_next,
-            mask_1, masked_words_1, mask_2, masked_words_2)
+            mask_1, texts_1_words_unmasked, mask_2, texts_2_words_unmasked)
 
 
 class AverageMeter:

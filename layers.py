@@ -451,7 +451,7 @@ class MLMNSPOutput(nn.Module):
         self.mod_linear_start = nn.Linear(3 * 2 * hidden_size_2, 1)
         self.att_linear_start = nn.Linear(3 * 8 * hidden_size, 1)
 
-    def forward(self, c_att, c_mod, q_att, q_mod, mask_1, mask_2):
+    def forward(self, c_att, c_mod, q_att, q_mod, mask_1, mask_2, texts_1_words_unmasked, texts_2_words_unmasked):
         start_mod = torch.cat((c_mod[:, 0], q_mod[:, 0], c_mod[:, 0] * q_mod[:, 0]), dim=-1)
         start_att = torch.cat((c_att[:, 0], q_att[:, 0], c_att[:, 0] * q_att[:, 0]), dim=-1)
         NSP_logits = self.mod_linear_start(start_mod) + self.att_linear_start(start_att)
@@ -462,4 +462,10 @@ class MLMNSPOutput(nn.Module):
         MLM_logits_1 = self.mod_linear(MLM_mod_1)
         MLM_logits_2 = self.mod_linear(MLM_mod_2)
 
-        return MLM_logits_1.squeeze(), MLM_logits_2.squeeze(), NSP_logits.squeeze()
+        masked_words_1 = texts_1_words_unmasked[mask_1]
+        masked_words_2 = texts_2_words_unmasked[mask_2]
+
+        MLM_logits = torch.cat((MLM_logits_1, MLM_logits_2), dim=0)
+        masked_words = torch.cat((masked_words_1, masked_words_2), dim=0)
+
+        return MLM_logits.squeeze(), masked_words, NSP_logits.squeeze()
