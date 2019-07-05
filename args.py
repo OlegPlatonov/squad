@@ -154,6 +154,10 @@ def get_train_args():
                         type=int,
                         default=8,
                         help='Number of fragments per text for GT pre-training.')
+    parser.add_argument("--local_rank",
+                        type=int,
+                        default=-1,
+                        help="local_rank for distributed training on gpus")
 
     args = parser.parse_args()
 

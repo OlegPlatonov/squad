@@ -7,6 +7,7 @@ Author:
 import layers
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class BiDAFBaseline(nn.Module):
@@ -194,12 +195,16 @@ class BiDAFGT(nn.Module):
 
         self.output_layer = layers.GTOutputDoubleWindowPooling(hidden_size=hidden_size, hidden_size_2=hidden_size_2)
 
-    def forward(self, cw_idxs, cc_idxs, qw_idxs, qc_idxs, gap_indices):
+    def forward(self, cw_idxs, cc_idxs, qw_idxs, qc_idxs, gap_indices, correct_gaps=None):
         att, mod, c_mask = self.encoder(cw_idxs, cc_idxs, qw_idxs, qc_idxs)
 
-        out = self.output_layer(att, mod, gap_indices, c_mask)
+        logits = self.output_layer(att, mod, gap_indices, c_mask)
 
-        return out
+        if correct_gaps is not None:
+            loss = F.cross_entropy(input=logits, target=correct_gaps)
+            return loss
+        else:
+            return logits
 
 
 class BiDAFMLMNSP(nn.Module):
