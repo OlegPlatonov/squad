@@ -44,7 +44,7 @@ def main(args):
     device = torch.device("cuda", args.local_rank)
     n_gpu = 1
     # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
-    torch.distributed.init_process_group(backend='nccl')
+    torch.distributed.init_process_group(backend='nccl', init_method='env://')
 
     log.info("device: {} n_gpu: {}, distributed training: {}".format(device, n_gpu, bool(args.local_rank != -1)))
 
