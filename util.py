@@ -471,7 +471,6 @@ class CheckpointSaver:
             'model_state': model.cpu().state_dict(),
             'step': step
         }
-        model.to(device)
 
         checkpoint_path = os.path.join(self.save_dir,
                                        'step_{}.pth.tar'.format(step))

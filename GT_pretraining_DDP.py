@@ -72,11 +72,12 @@ def main(args):
     step = 0
 
     # Get saver
-    saver = util.CheckpointSaver(args.save_dir,
-                                 max_checkpoints=args.max_checkpoints,
-                                 metric_name='Accuracy',
-                                 maximize_metric=args.maximize_metric,
-                                 log=log)
+    if args.local_rank == 0:
+        saver = util.CheckpointSaver(args.save_dir,
+                                     max_checkpoints=args.max_checkpoints,
+                                     metric_name='Accuracy',
+                                     maximize_metric=args.maximize_metric,
+                                     log=log)
 
     # Get optimizer and scheduler
     optimizer = optim.Adam(model.parameters(), args.lr, weight_decay=args.l2_wd)
@@ -163,7 +164,8 @@ def main(args):
                     # Evaluate and save checkpoint
                     log.info('Saving checkpoint at step {}...'.format(step))
                     results = evaluate(model, dev_loader, device, args)
-                    saver.save(step, model, optimizer, results['Accuracy'], device)
+                    if args.local_rank == 0:
+                        saver.save(step, model, optimizer, results['Accuracy'], device)
 
                     # Log to console
                     results_str = ', '.join('{}: {:05.2f}'.format(k, v)
@@ -180,7 +182,8 @@ def main(args):
                 # Evaluate and save checkpoint
                 log.info('Saving checkpoint at step {}...'.format(step))
                 results = evaluate(model, dev_loader, device, args)
-                saver.save(step, model, optimizer, results['Accuracy'], device)
+                if args.local_rank == 0:
+                    saver.save(step, model, optimizer, results['Accuracy'], device)
 
                 # Log to console
                 results_str = ', '.join('{}: {:05.2f}'.format(k, v)
