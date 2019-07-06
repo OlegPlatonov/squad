@@ -22,10 +22,10 @@ from apex.parallel import DistributedDataParallel as DDP
 
 def main(args):
     # Set up logging and devices
-    args.save_dir = util.get_save_dir(args.save_dir, args.name, training=True)
-    log = util.get_logger(args.save_dir, args.name)
     if args.local_rank == 0:
         tbx = SummaryWriter(args.save_dir)
+        args.save_dir = util.get_save_dir(args.save_dir, args.name, training=True)
+    log = util.get_logger(args.save_dir, args.name)
     log.info('Args: {}'.format(dumps(vars(args), indent=4, sort_keys=True)))
 
     # Set random seed
